@@ -143,9 +143,13 @@ export async function removeBackgroundDataUrl(dataUrl: string, params: RemoveBac
 
 async function removeBackgroundWithModel(dataUrl: string, strength: RemoveBackgroundStrength) {
     const { remove, newSession, rembgConfig } = await import("@bunnio/rembg-web");
-    const model = await resolveRemoveBackgroundModel(strength);
     rembgConfig.setBaseUrl("/models");
-    const session = await newSession(model);
+    const session = await newSession(resolveRemoveBackgroundModel(), undefined, {
+        executionProviders: ["wasm"],
+        numThreads: 1,
+        proxy: false,
+        simd: false,
+    });
     const result = await remove(await dataUrlToBlob(dataUrl), {
         session,
         postProcessMask: strength !== "strong",
@@ -153,18 +157,7 @@ async function removeBackgroundWithModel(dataUrl: string, strength: RemoveBackgr
     return adjustModelAlpha(await blobToDataUrl(result), strength);
 }
 
-async function canLoadLocalModel(file: string) {
-    try {
-        const response = await fetch(`/models/${file}`, { method: "HEAD", cache: "force-cache" });
-        return response.ok;
-    } catch {
-        return false;
-    }
-}
-
-async function resolveRemoveBackgroundModel(strength: RemoveBackgroundStrength) {
-    if (strength === "conservative" && (await canLoadLocalModel("u2net_human_seg.onnx"))) return "u2net_human_seg";
-    if (strength === "strong" && (await canLoadLocalModel("u2net.onnx"))) return "u2net";
+function resolveRemoveBackgroundModel() {
     return "u2netp";
 }
 
