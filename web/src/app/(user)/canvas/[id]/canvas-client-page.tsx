@@ -31,6 +31,7 @@ import { CanvasNodeContextMenu } from "../components/canvas-context-menu";
 import { CanvasNodeAngleDialog, type CanvasImageAngleParams } from "../components/canvas-node-angle-dialog";
 import { CanvasNodeCropDialog, type CanvasImageCropRect } from "../components/canvas-node-crop-dialog";
 import { CanvasNodeMaskEditDialog, type CanvasImageMaskEditPayload } from "../components/canvas-node-mask-edit-dialog";
+import { CanvasNodeRemoveBackgroundDialog, type CanvasRemoveBackgroundParams } from "../components/canvas-node-remove-background-dialog";
 import { CanvasNodeSplitDialog, type CanvasImageSplitParams } from "../components/canvas-node-split-dialog";
 import { CanvasNodeUpscaleDialog, type CanvasImageUpscaleParams } from "../components/canvas-node-upscale-dialog";
 import { buildNodeChatMessages, buildNodeGenerationContext, buildNodeGenerationInputs, hydrateNodeGenerationContext, type NodeGenerationInput } from "../components/canvas-node-generation";
@@ -283,6 +284,7 @@ function InfiniteCanvasPage() {
     const [infoNodeId, setInfoNodeId] = useState<string | null>(null);
     const [cropNodeId, setCropNodeId] = useState<string | null>(null);
     const [maskEditNodeId, setMaskEditNodeId] = useState<string | null>(null);
+    const [removeBackgroundNodeId, setRemoveBackgroundNodeId] = useState<string | null>(null);
     const [splitNodeId, setSplitNodeId] = useState<string | null>(null);
     const [upscaleNodeId, setUpscaleNodeId] = useState<string | null>(null);
     const [superResolveNodeId, setSuperResolveNodeId] = useState<string | null>(null);
@@ -588,6 +590,7 @@ function InfiniteCanvasPage() {
     const infoNode = infoNodeId ? nodeById.get(infoNodeId) || null : null;
     const cropNode = cropNodeId ? nodeById.get(cropNodeId) || null : null;
     const maskEditNode = maskEditNodeId ? nodeById.get(maskEditNodeId) || null : null;
+    const removeBackgroundNode = removeBackgroundNodeId ? nodeById.get(removeBackgroundNodeId) || null : null;
     const splitNode = splitNodeId ? nodeById.get(splitNodeId) || null : null;
     const upscaleNode = upscaleNodeId ? nodeById.get(upscaleNodeId) || null : null;
     const superResolveNode = superResolveNodeId ? nodeById.get(superResolveNodeId) || null : null;
@@ -706,6 +709,7 @@ function InfiniteCanvasPage() {
             setInfoNodeId((current) => (current && allIds.has(current) ? null : current));
             setCropNodeId((current) => (current && allIds.has(current) ? null : current));
             setMaskEditNodeId((current) => (current && allIds.has(current) ? null : current));
+            setRemoveBackgroundNodeId((current) => (current && allIds.has(current) ? null : current));
             setAngleNodeId((current) => (current && allIds.has(current) ? null : current));
             setPreviewNodeId((current) => (current && allIds.has(current) ? null : current));
             setRunningNodeId((current) => (current && allIds.has(current) ? null : current));
@@ -1523,10 +1527,12 @@ function InfiniteCanvasPage() {
     }, []);
 
     const removeImageBackground = useCallback(
-        async (node: CanvasNodeData) => {
+        async (node: CanvasNodeData, params: CanvasRemoveBackgroundParams) => {
             if (!node.metadata?.content) return;
             try {
-                const dataUrl = await removeBackgroundDataUrl(node.metadata.content);
+                setRemoveBackgroundNodeId(null);
+                const result = await removeBackgroundDataUrl(node.metadata.content, params);
+                const dataUrl = result.dataUrl;
                 const image = await uploadImage(dataUrl);
                 const size = fitNodeSize(image.width, image.height, node.width, node.height);
                 const childId = nanoid();
@@ -1547,7 +1553,11 @@ function InfiniteCanvasPage() {
                 setSelectedNodeIds(new Set([childId]));
                 setSelectedConnectionId(null);
                 setDialogNodeId(childId);
-                message.success("已生成透明 PNG");
+                if (result.quality.status === "warning") {
+                    message.warning(`已生成透明 PNG，质量检测：${result.quality.warnings.slice(0, 2).join("、")}`);
+                } else {
+                    message.success(result.method === "model" ? "已完成模型抠图" : "已生成透明 PNG");
+                }
             } catch (error) {
                 message.error(error instanceof Error ? error.message : "去背景失败");
             }
@@ -2510,7 +2520,7 @@ function InfiniteCanvasPage() {
                     onDownload={downloadNodeImage}
                     onSaveAsset={(node) => void saveNodeAsset(node)}
                     onMaskEdit={(node) => setMaskEditNodeId(node.id)}
-                    onRemoveBackground={(node) => void removeImageBackground(node)}
+                    onRemoveBackground={(node) => setRemoveBackgroundNodeId(node.id)}
                     onCrop={(node) => setCropNodeId(node.id)}
                     onSplit={(node) => setSplitNodeId(node.id)}
                     onUpscale={(node) => setUpscaleNodeId(node.id)}
@@ -2583,6 +2593,8 @@ function InfiniteCanvasPage() {
                 {cropNode?.metadata?.content ? <CanvasNodeCropDialog dataUrl={cropNode.metadata.content} open={Boolean(cropNode)} onClose={() => setCropNodeId(null)} onConfirm={(crop) => void cropImageNode(cropNode!, crop)} /> : null}
 
                 {maskEditNode?.metadata?.content ? <CanvasNodeMaskEditDialog dataUrl={maskEditNode.metadata.content} open={Boolean(maskEditNode)} onClose={() => setMaskEditNodeId(null)} onConfirm={(payload) => void maskEditImageNode(maskEditNode!, payload)} /> : null}
+
+                {removeBackgroundNode?.metadata?.content ? <CanvasNodeRemoveBackgroundDialog dataUrl={removeBackgroundNode.metadata.content} open={Boolean(removeBackgroundNode)} onClose={() => setRemoveBackgroundNodeId(null)} onConfirm={(params) => void removeImageBackground(removeBackgroundNode!, params)} /> : null}
 
                 {splitNode?.metadata?.content ? <CanvasNodeSplitDialog dataUrl={splitNode.metadata.content} open={Boolean(splitNode)} onClose={() => setSplitNodeId(null)} onConfirm={(params) => void splitImageNode(splitNode!, params)} /> : null}
 
