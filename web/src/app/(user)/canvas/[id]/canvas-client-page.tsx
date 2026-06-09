@@ -1529,29 +1529,45 @@ function InfiniteCanvasPage() {
     const removeImageBackground = useCallback(
         async (node: CanvasNodeData, params: CanvasRemoveBackgroundParams) => {
             if (!node.metadata?.content) return;
+            setRemoveBackgroundNodeId(null);
+            const childId = nanoid();
+            const child: CanvasNodeData = {
+                id: childId,
+                type: CanvasNodeType.Image,
+                title: "Transparent PNG",
+                position: { x: node.position.x + node.width + 96, y: node.position.y },
+                width: node.width,
+                height: node.height,
+                metadata: {
+                    prompt: node.metadata?.prompt,
+                    status: NODE_STATUS_LOADING,
+                },
+            };
+            setNodes((prev) => [...prev, child]);
+            setConnections((prev) => [...prev, { id: nanoid(), fromNodeId: node.id, toNodeId: childId }]);
+            setSelectedNodeIds(new Set([childId]));
+            setSelectedConnectionId(null);
             try {
-                setRemoveBackgroundNodeId(null);
                 const result = await removeBackgroundDataUrl(node.metadata.content, params);
                 const dataUrl = result.dataUrl;
                 const image = await uploadImage(dataUrl);
                 const size = fitNodeSize(image.width, image.height, node.width, node.height);
-                const childId = nanoid();
-                const child: CanvasNodeData = {
-                    id: childId,
-                    type: CanvasNodeType.Image,
-                    title: "Transparent PNG",
-                    position: { x: node.position.x + node.width + 96, y: node.position.y },
-                    width: size.width,
-                    height: size.height,
-                    metadata: {
-                        ...imageMetadata(image),
-                        prompt: node.metadata?.prompt,
-                    },
-                };
-                setNodes((prev) => [...prev, child]);
-                setConnections((prev) => [...prev, { id: nanoid(), fromNodeId: node.id, toNodeId: childId }]);
-                setSelectedNodeIds(new Set([childId]));
-                setSelectedConnectionId(null);
+                setNodes((prev) =>
+                    prev.map((item) =>
+                        item.id === childId
+                            ? {
+                                  ...item,
+                                  width: size.width,
+                                  height: size.height,
+                                  metadata: {
+                                      ...imageMetadata(image),
+                                      prompt: node.metadata?.prompt,
+                                      errorDetails: undefined,
+                                  },
+                              }
+                            : item,
+                    ),
+                );
                 setDialogNodeId(childId);
                 if (result.quality.status === "warning") {
                     message.warning(`已生成透明 PNG，质量检测：${result.quality.warnings.slice(0, 2).join("、")}`);
@@ -1559,7 +1575,9 @@ function InfiniteCanvasPage() {
                     message.success(result.method === "model" ? "已完成模型抠图" : "已生成透明 PNG");
                 }
             } catch (error) {
-                message.error(error instanceof Error ? error.message : "去背景失败");
+                const errorDetails = error instanceof Error ? error.message : "去背景失败";
+                message.error(errorDetails);
+                setNodes((prev) => prev.map((item) => (item.id === childId ? { ...item, metadata: { ...item.metadata, status: NODE_STATUS_ERROR, errorDetails } } : item)));
             }
         },
         [message],

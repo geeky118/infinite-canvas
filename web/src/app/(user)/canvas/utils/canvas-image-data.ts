@@ -154,7 +154,8 @@ async function removeBackgroundWithModel(dataUrl: string, strength: RemoveBackgr
         session,
         postProcessMask: strength !== "strong",
     });
-    return adjustModelAlpha(await blobToDataUrl(result), strength);
+    const adjusted = await adjustModelAlpha(await blobToDataUrl(result), strength);
+    return restoreFineHairDetails(dataUrl, adjusted, strength);
 }
 
 function resolveRemoveBackgroundModel() {
@@ -479,6 +480,88 @@ async function adjustModelAlpha(dataUrl: string, strength: RemoveBackgroundStren
     }
     context.putImageData(imageData, 0, 0);
     return canvas.toDataURL("image/png");
+}
+
+async function restoreFineHairDetails(sourceDataUrl: string, cutoutDataUrl: string, strength: RemoveBackgroundStrength) {
+    if (strength === "strong") return cutoutDataUrl;
+    const [sourceImage, cutoutImage] = await Promise.all([loadImage(sourceDataUrl), loadImage(cutoutDataUrl)]);
+    const width = cutoutImage.width;
+    const height = cutoutImage.height;
+    if (sourceImage.width !== width || sourceImage.height !== height) return cutoutDataUrl;
+
+    const sourceCanvas = document.createElement("canvas");
+    const cutoutCanvas = document.createElement("canvas");
+    sourceCanvas.width = cutoutCanvas.width = width;
+    sourceCanvas.height = cutoutCanvas.height = height;
+    const sourceContext = sourceCanvas.getContext("2d", { willReadFrequently: true });
+    const cutoutContext = cutoutCanvas.getContext("2d", { willReadFrequently: true });
+    if (!sourceContext || !cutoutContext) return cutoutDataUrl;
+    sourceContext.drawImage(sourceImage, 0, 0);
+    cutoutContext.drawImage(cutoutImage, 0, 0);
+    const source = sourceContext.getImageData(0, 0, width, height);
+    const cutout = cutoutContext.getImageData(0, 0, width, height);
+    restoreDarkEdgePixels(source.data, cutout.data, width, height, strength);
+    cutoutContext.putImageData(cutout, 0, 0);
+    return cutoutCanvas.toDataURL("image/png");
+}
+
+function restoreDarkEdgePixels(source: Uint8ClampedArray, cutout: Uint8ClampedArray, width: number, height: number, strength: RemoveBackgroundStrength) {
+    const nextAlpha = new Uint8ClampedArray(width * height);
+    const radius = strength === "conservative" ? 3 : 2;
+    const maxAlpha = strength === "conservative" ? 150 : 96;
+    const minAlpha = strength === "conservative" ? 34 : 24;
+    for (let y = radius; y < height - radius; y += 1) {
+        for (let x = radius; x < width - radius; x += 1) {
+            const index = y * width + x;
+            const offset = index * 4;
+            const currentAlpha = cutout[offset + 3];
+            if (currentAlpha >= 160) continue;
+            const luminance = pixelLuminance(source[offset], source[offset + 1], source[offset + 2]);
+            if (luminance > 92) continue;
+            if (localContrast(source, width, x, y) < 18) continue;
+            const distance = nearestOpaqueDistance(cutout, width, x, y, radius);
+            if (!distance) continue;
+            const alpha = Math.max(minAlpha, Math.round(maxAlpha * (1 - (distance - 1) / radius)));
+            nextAlpha[index] = Math.max(currentAlpha, alpha);
+        }
+    }
+    for (let index = 0; index < nextAlpha.length; index += 1) {
+        if (!nextAlpha[index]) continue;
+        cutout[index * 4 + 3] = Math.max(cutout[index * 4 + 3], nextAlpha[index]);
+    }
+}
+
+function nearestOpaqueDistance(data: Uint8ClampedArray, width: number, x: number, y: number, radius: number) {
+    for (let distance = 1; distance <= radius; distance += 1) {
+        for (let dy = -distance; dy <= distance; dy += 1) {
+            for (let dx = -distance; dx <= distance; dx += 1) {
+                if (Math.abs(dx) !== distance && Math.abs(dy) !== distance) continue;
+                const offset = ((y + dy) * width + x + dx) * 4;
+                if (data[offset + 3] >= 220) return distance;
+            }
+        }
+    }
+    return 0;
+}
+
+function localContrast(data: Uint8ClampedArray, width: number, x: number, y: number) {
+    const centerOffset = (y * width + x) * 4;
+    const center = pixelLuminance(data[centerOffset], data[centerOffset + 1], data[centerOffset + 2]);
+    let contrast = 0;
+    for (const [dx, dy] of [
+        [-1, 0],
+        [1, 0],
+        [0, -1],
+        [0, 1],
+    ]) {
+        const offset = ((y + dy) * width + x + dx) * 4;
+        contrast = Math.max(contrast, Math.abs(center - pixelLuminance(data[offset], data[offset + 1], data[offset + 2])));
+    }
+    return contrast;
+}
+
+function pixelLuminance(r: number, g: number, b: number) {
+    return 0.299 * r + 0.587 * g + 0.114 * b;
 }
 
 function analyzeAlphaQuality(imageData: ImageData, width: number, height: number): RemoveBackgroundQuality {
