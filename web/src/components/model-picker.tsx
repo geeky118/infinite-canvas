@@ -5,7 +5,7 @@ import { Cpu } from "lucide-react";
 
 import { Select, SelectContent, SelectItem, SelectTrigger } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
-import { selectableModelsByCapability, type AiConfig, type ModelCapability } from "@/stores/use-config-store";
+import { selectableModelOptionsByCapability, type AiConfig, type ModelCapability } from "@/stores/use-config-store";
 
 type ModelPickerProps = {
     config: AiConfig;
@@ -21,7 +21,10 @@ type ModelPickerProps = {
 export function ModelPicker({ config, value, onChange, capability, className, fullWidth = false, placeholder = "选择模型", onMissingConfig }: ModelPickerProps) {
     const pickerId = useId();
     const [open, setOpen] = useState(false);
-    const options = useMemo(() => Array.from(new Set([...(config.channelMode === "local" && !capability ? [value] : []), ...selectableModelsByCapability(config, capability)].filter((model): model is string => Boolean(model)))), [capability, config, value]);
+    const options = useMemo(() => {
+        const modelOptions = selectableModelOptionsByCapability(config, capability);
+        return value && !modelOptions.some((option) => option.value === value) ? [{ value, label: value }, ...modelOptions] : modelOptions;
+    }, [capability, config, value]);
     const current = value || "";
 
     useEffect(() => {
@@ -68,9 +71,9 @@ export function ModelPicker({ config, value, onChange, capability, className, fu
                 onMouseDown={(event) => event.stopPropagation()}
             >
                 {options.length ? (
-                    options.map((model) => (
-                        <SelectItem key={model} value={model} textValue={model}>
-                            <ModelLabel model={model} />
+                    options.map((option) => (
+                        <SelectItem key={`${option.value}-${option.label}`} value={option.value} textValue={option.label}>
+                            <ModelLabel model={option.value} label={option.label} />
                         </SelectItem>
                     ))
                 ) : (
@@ -90,11 +93,11 @@ function emptyModelLabel(config: AiConfig, capability?: ModelCapability) {
     return config.models.length ? `暂无匹配的${label}模型` : "请先到配置里拉取模型列表";
 }
 
-function ModelLabel({ model }: { model: string }) {
+function ModelLabel({ model, label = model }: { model: string; label?: string }) {
     return (
         <span className="flex min-w-0 items-center gap-2">
             <ModelIcon model={model} />
-            <span className="truncate">{model}</span>
+            <span className="truncate">{label}</span>
         </span>
     );
 }

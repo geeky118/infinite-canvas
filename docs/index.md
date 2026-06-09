@@ -21,6 +21,13 @@
 - [后端数据库说明](/docs/backend/backend-database)
 - [画布数据结构](/docs/backend/canvas-data-structure)
 
+## AI / 自动化开发
+
+- [系统总览](architecture/system-overview.md)
+- [验证运行手册](runbooks/verification.md)
+- [执行计划说明](exec-plans/README.md)
+- [执行计划模板](exec-plans/TEMPLATE.md)
+
 ## 商务合作
 
 - [开源协议](/docs/business/license)

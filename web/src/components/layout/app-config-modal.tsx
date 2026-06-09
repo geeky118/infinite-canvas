@@ -1,15 +1,15 @@
 "use client";
 
 import { App, Button, Form, Input, Modal, Progress, Segmented, Select } from "antd";
-import { Cloud, RefreshCw, Wifi } from "lucide-react";
-import { useState } from "react";
+import { Cloud, Plus, RefreshCw, Trash2, Wifi } from "lucide-react";
+import { useEffect, useState } from "react";
 
 import { ModelPicker } from "@/components/model-picker";
 import { fetchImageModels } from "@/services/api/image";
 import { syncAppDataToWebdav, type AppSyncDomainKey, type AppSyncProgressEvent } from "@/services/app-sync";
 import { testWebdavConnection, WEBDAV_MANIFEST_FILE_NAME } from "@/services/webdav-sync";
 import { audioFormatOptions, audioVoiceOptions, normalizeAudioSpeedValue } from "@/lib/audio-generation";
-import { filterModelsByCapability, useConfigStore, useEffectiveConfig, type AiConfig, type ModelCapability } from "@/stores/use-config-store";
+import { filterModelsByCapability, normalizeLocalChannel, useConfigStore, useEffectiveConfig, type AiConfig, type AiLocalChannel, type ModelCapability } from "@/stores/use-config-store";
 
 type ModelGroup = {
     capability: ModelCapability;
@@ -73,40 +73,75 @@ export function AppConfigModal() {
     const allowCustomChannel = modelChannel?.allowCustomChannel === true;
     const effectiveMode = allowCustomChannel ? config.channelMode : "remote";
     const modelConfig = effectiveMode === "remote" ? effectiveConfig : config;
-    const modelOptions = config.models.map((model) => ({ label: model, value: model }));
+    const [activeChannelId, setActiveChannelId] = useState(config.localChannels[0]?.id || "");
+    const activeChannel = config.localChannels.find((channel) => channel.id === activeChannelId) || config.localChannels[0];
+    const activeChannelModels = activeChannel?.models || [];
+    const modelOptions = activeChannelModels.map((model) => ({ label: model, value: model }));
     const webdavReady = Boolean(webdav.url.trim());
+
+    useEffect(() => {
+        if (!config.localChannels.length) return;
+        if (!activeChannelId || !config.localChannels.some((channel) => channel.id === activeChannelId)) setActiveChannelId(config.localChannels[0].id);
+    }, [activeChannelId, config.localChannels]);
 
     const finishConfig = () => {
         setConfigDialogOpen(false);
-        if (effectiveMode === "local" && (!config.baseUrl.trim() || !config.apiKey.trim())) return;
+        if (effectiveMode === "local" && !config.localChannels.some((channel) => channel.baseUrl.trim() && channel.apiKey.trim())) return;
         if (!modelConfig.imageModel.trim() || !modelConfig.videoModel.trim() || !modelConfig.textModel.trim()) return;
         if (!allowCustomChannel && config.channelMode !== "remote") updateConfig("channelMode", "remote");
         message.success(shouldPromptContinue ? "配置已保存，请继续刚才的请求" : "配置已保存");
         clearPromptContinue();
     };
 
+    const updateLocalChannels = (channels: AiLocalChannel[]) => {
+        updateConfig("localChannels", channels);
+        const first = channels[0];
+        if (!first) return;
+        updateConfig("baseUrl", first.baseUrl);
+        updateConfig("apiKey", first.apiKey);
+        updateConfig("models", first.models);
+        updateConfig("imageModels", first.imageModels);
+        updateConfig("videoModels", first.videoModels);
+        updateConfig("textModels", first.textModels);
+        updateConfig("audioModels", first.audioModels);
+    };
+
+    const updateActiveChannel = (patch: Partial<AiLocalChannel>) => {
+        if (!activeChannel) return;
+        updateLocalChannels(config.localChannels.map((channel) => (channel.id === activeChannel.id ? normalizeLocalChannel({ ...channel, ...patch, id: channel.id }) : channel)));
+    };
+
+    const addLocalChannel = () => {
+        const channel = normalizeLocalChannel({ id: `channel-${Date.now()}`, name: "新渠道", baseUrl: "", apiKey: "", models: [], imageModels: [], videoModels: [], textModels: [], audioModels: [] });
+        updateLocalChannels([...config.localChannels, channel]);
+        setActiveChannelId(channel.id);
+    };
+
+    const removeActiveChannel = () => {
+        if (!activeChannel || config.localChannels.length <= 1) return;
+        const next = config.localChannels.filter((channel) => channel.id !== activeChannel.id);
+        updateLocalChannels(next);
+        setActiveChannelId(next[0]?.id || "");
+    };
+
     const refreshModels = async () => {
         if (effectiveMode === "remote") return;
-        if (!config.baseUrl.trim() || !config.apiKey.trim()) {
+        if (!activeChannel?.baseUrl.trim() || !activeChannel.apiKey.trim()) {
             message.error("请先填写 Base URL 和 API Key");
             return;
         }
         setLoadingModels(true);
         try {
-            const models = await fetchImageModels(config);
+            const models = await fetchImageModels({ ...config, baseUrl: activeChannel.baseUrl, apiKey: activeChannel.apiKey });
             const imageModels = filterModelsByCapability(models, "image");
             const videoModels = filterModelsByCapability(models, "video");
             const textModels = filterModelsByCapability(models, "text");
             const audioModels = filterModelsByCapability(models, "audio");
-            const nextImageModels = resolveNextCapabilityModels(config.imageModels, imageModels, models);
-            const nextVideoModels = resolveNextCapabilityModels(config.videoModels, videoModels, models);
-            const nextTextModels = resolveNextCapabilityModels(config.textModels, textModels, models);
-            const nextAudioModels = resolveNextCapabilityModels(config.audioModels, audioModels, models);
-            updateConfig("models", models);
-            updateConfig("imageModels", nextImageModels);
-            updateConfig("videoModels", nextVideoModels);
-            updateConfig("textModels", nextTextModels);
-            updateConfig("audioModels", nextAudioModels);
+            const nextImageModels = resolveNextCapabilityModels(activeChannel.imageModels, imageModels, models);
+            const nextVideoModels = resolveNextCapabilityModels(activeChannel.videoModels, videoModels, models);
+            const nextTextModels = resolveNextCapabilityModels(activeChannel.textModels, textModels, models);
+            const nextAudioModels = resolveNextCapabilityModels(activeChannel.audioModels, audioModels, models);
+            updateActiveChannel({ models, imageModels: nextImageModels, videoModels: nextVideoModels, textModels: nextTextModels, audioModels: nextAudioModels });
             if (nextImageModels.length && !nextImageModels.includes(config.imageModel)) updateConfig("imageModel", nextImageModels[0]);
             if (nextVideoModels.length && !nextVideoModels.includes(config.videoModel)) updateConfig("videoModel", nextVideoModels[0]);
             if (nextTextModels.length && !nextTextModels.includes(config.textModel)) updateConfig("textModel", nextTextModels[0]);
@@ -121,7 +156,7 @@ export function AppConfigModal() {
 
     const updateCapabilityModels = (group: ModelGroup, models: string[]) => {
         const next = uniqueModels(models);
-        updateConfig(group.modelsKey, next);
+        updateActiveChannel({ [group.modelsKey]: next });
         if (!next.includes(config[group.modelKey])) updateConfig(group.modelKey, next[0] || "");
     };
 
@@ -213,18 +248,35 @@ export function AppConfigModal() {
                     ) : null}
                     {effectiveMode === "local" ? (
                         <>
+                            <Form.Item label="本地渠道" className="mb-4">
+                                <div className="flex gap-2">
+                                    <Select
+                                        className="min-w-0 flex-1"
+                                        value={activeChannel?.id}
+                                        options={config.localChannels.map((channel) => ({ label: `${channel.name || "未命名渠道"} · ${channel.baseUrl || "未配置"}`, value: channel.id }))}
+                                        onChange={setActiveChannelId}
+                                    />
+                                    <Button icon={<Plus className="size-4" />} onClick={addLocalChannel}>
+                                        新增
+                                    </Button>
+                                    <Button icon={<Trash2 className="size-4" />} disabled={config.localChannels.length <= 1} onClick={removeActiveChannel} />
+                                </div>
+                            </Form.Item>
                             <div className="grid gap-4 md:grid-cols-2">
-                                <Form.Item label="Base URL" className="mb-4">
-                                    <Input value={config.baseUrl} onChange={(event) => updateConfig("baseUrl", event.target.value)} />
+                                <Form.Item label="渠道名称" className="mb-4">
+                                    <Input value={activeChannel?.name || ""} onChange={(event) => updateActiveChannel({ name: event.target.value })} />
                                 </Form.Item>
-                                <Form.Item label="API Key" className="mb-4">
-                                    <Input.Password value={config.apiKey} onChange={(event) => updateConfig("apiKey", event.target.value)} />
+                                <Form.Item label="Base URL" className="mb-4">
+                                    <Input value={activeChannel?.baseUrl || ""} onChange={(event) => updateActiveChannel({ baseUrl: event.target.value })} />
+                                </Form.Item>
+                                <Form.Item label="API Key" className="mb-4 md:col-span-2">
+                                    <Input.Password value={activeChannel?.apiKey || ""} onChange={(event) => updateActiveChannel({ apiKey: event.target.value })} />
                                 </Form.Item>
                             </div>
                             <div className="mb-5 flex items-center justify-between gap-3 rounded-lg border border-stone-200 px-3 py-2 dark:border-stone-800">
                                 <div className="min-w-0">
                                     <div className="text-sm font-medium">模型列表</div>
-                                    <div className="mt-1 text-xs text-stone-500">当前已保存 {config.models.length} 个模型</div>
+                                    <div className="mt-1 text-xs text-stone-500">当前渠道已保存 {activeChannelModels.length} 个模型</div>
                                 </div>
                                 <Button size="small" loading={loadingModels} onClick={() => void refreshModels()}>
                                     拉取模型列表
@@ -251,8 +303,8 @@ export function AppConfigModal() {
                                             showSearch
                                             allowClear
                                             maxTagCount="responsive"
-                                            placeholder={config.models.length ? `请选择${group.optionsLabel}` : "请先拉取模型列表"}
-                                            value={config[group.modelsKey]}
+                                            placeholder={activeChannelModels.length ? `请选择${group.optionsLabel}` : "请先拉取模型列表"}
+                                            value={activeChannel?.[group.modelsKey] || []}
                                             options={modelOptions}
                                             onChange={(models) => updateCapabilityModels(group, models)}
                                         />

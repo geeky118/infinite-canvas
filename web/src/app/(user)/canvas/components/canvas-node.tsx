@@ -320,10 +320,10 @@ export const CanvasNode = React.memo(function CanvasNode({
 
                 {!hasImageContent && !hasVideoContent && !hasAudioContent ? <div className="pointer-events-none absolute inset-x-0 bottom-0 h-12" style={{ background: `linear-gradient(to top, ${theme.canvas.background}66, transparent)` }} /> : null}
 
-                <ResizeHandle corner="top-left" onMouseDown={handleResizeMouseDown} />
-                <ResizeHandle corner="top-right" onMouseDown={handleResizeMouseDown} />
-                <ResizeHandle corner="bottom-left" onMouseDown={handleResizeMouseDown} />
-                <ResizeHandle corner="bottom-right" onMouseDown={handleResizeMouseDown} />
+                <ResizeHandle corner="top-left" visible={hovered || isSelected} onMouseDown={handleResizeMouseDown} />
+                <ResizeHandle corner="top-right" visible={hovered || isSelected} onMouseDown={handleResizeMouseDown} />
+                <ResizeHandle corner="bottom-left" visible={hovered || isSelected} onMouseDown={handleResizeMouseDown} />
+                <ResizeHandle corner="bottom-right" visible={hovered || isSelected} onMouseDown={handleResizeMouseDown} />
             </div>
 
             <ConnectionHandleDot side="left" visible={hovered || isSelected || isConnecting} onMouseDown={(event) => onConnectStart(event, data.id, "target")} />
@@ -652,7 +652,8 @@ function BatchFrame({ batchCount, batchExpanded, batchOpening, batchRecovering, 
         </div>
     );
 }
-function ResizeHandle({ corner, onMouseDown }: { corner: ResizeCorner; onMouseDown: (event: React.MouseEvent, corner: ResizeCorner) => void }) {
+function ResizeHandle({ corner, visible, onMouseDown }: { corner: ResizeCorner; visible: boolean; onMouseDown: (event: React.MouseEvent, corner: ResizeCorner) => void }) {
+    const theme = canvasThemes[useThemeStore((state) => state.theme)];
     const positionClass = {
         "top-left": "-left-[14px] -top-[14px] cursor-nwse-resize",
         "top-right": "-right-[14px] -top-[14px] cursor-nesw-resize",
@@ -660,7 +661,11 @@ function ResizeHandle({ corner, onMouseDown }: { corner: ResizeCorner; onMouseDo
         "bottom-right": "-bottom-[14px] -right-[14px] cursor-nwse-resize",
     }[corner];
 
-    return <div className={`absolute z-50 size-7 ${positionClass}`} onMouseDown={(event) => onMouseDown(event, corner)} />;
+    return (
+        <div className={`absolute z-50 grid size-7 place-items-center ${positionClass}`} onMouseDown={(event) => onMouseDown(event, corner)}>
+            <span className={`block size-3 rounded-full border transition ${visible ? "opacity-100" : "opacity-0"}`} style={{ background: theme.node.panel, borderColor: selectionBlue, boxShadow: "0 2px 8px rgba(47,128,255,.25)" }} />
+        </div>
+    );
 }
 
 function ConnectionHandleDot({ side, visible, onMouseDown }: { side: "left" | "right"; visible: boolean; onMouseDown: (event: React.MouseEvent) => void }) {

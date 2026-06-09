@@ -22,6 +22,7 @@ export default function nextConfig(phase: string): NextConfig {
         env: {
             NEXT_PUBLIC_APP_VERSION: localVersion,
             NEXT_PUBLIC_APP_RELEASES: JSON.stringify(releases),
+            NEXT_PUBLIC_DEFAULT_LOCAL_CHANNELS: process.env.NEXT_PUBLIC_DEFAULT_LOCAL_CHANNELS || "",
         },
     };
 }

@@ -5,6 +5,7 @@
 ## 基本原则
 
 - 先读现有代码，再动手修改，优先沿用项目已有结构和写法。
+- 非简单任务先参考 `docs/architecture/system-overview.md` 理解模块边界；多文件、多阶段或高风险任务需要在 `docs/exec-plans/active/` 创建或更新执行计划。
 - 写代码保持最少行数，能简单实现就不要引入复杂抽象。
 - 标准格式、协议、解析、压缩、加密、日期等通用能力优先使用成熟稳定的库，不要手写底层实现，除非用户明确要求或项目已有实现必须沿用。
 - 不要为了“兼容更多场景”写大量分支，只实现当前明确需要的功能。
@@ -12,6 +13,7 @@
 - 每次写完代码，不需要检查语法，不需要执行构建，用户会自己做。
 - 不要改无关文件，不要顺手重构。
 - 如果工作区已有用户改动，不要回滚，不要覆盖；只在必要范围内追加修改。
+- 需要验证时优先参考 `docs/runbooks/verification.md`；如果按本项目规则没有运行构建或测试，最终回复中说明未运行即可。
 
 ## 反复提醒沉淀
 
@@ -68,6 +70,7 @@
 
 - README 保持简洁，只放项目介绍、核心功能、快速开始和文档入口。
 - `docs/index.md` 放给 AI 使用的文档索引，不要再放到 `docs/content/docs/` 内容目录里。
+- `docs/architecture/`、`docs/runbooks/`、`docs/exec-plans/` 是 harness 文档，主要服务 AI / 自动化开发交接，不作为正式用户文档内容目录。
 - 详细功能介绍写到 `docs/content/docs/overview/features.mdx`。
 - 后续待办写到 `docs/content/docs/progress/todo.mdx`。
 - 已实现但还需要用户测试确认的事项写到 `docs/content/docs/progress/pending-test.mdx`。

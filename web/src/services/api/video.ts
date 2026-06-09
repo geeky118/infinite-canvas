@@ -4,7 +4,7 @@ import { dataUrlToFile } from "@/lib/image-utils";
 import { getMediaBlob, uploadMediaFile, type UploadedFile } from "@/services/file-storage";
 import { imageToDataUrl } from "@/services/image-storage";
 import { boolConfig, buildSeedancePromptText, isSeedanceVideoConfig, normalizeSeedanceDuration, normalizeSeedanceRatio, normalizeSeedanceResolution, seedanceVideoReferenceError, SEEDANCE_REFERENCE_LIMITS } from "@/lib/seedance-video";
-import { buildApiUrl, type AiConfig } from "@/stores/use-config-store";
+import { buildApiUrl, resolveRequestConfig, type AiConfig } from "@/stores/use-config-store";
 import { useUserStore } from "@/stores/use-user-store";
 import type { ReferenceImage } from "@/types/image";
 import type { ReferenceAudio, ReferenceVideo } from "@/types/media";
@@ -60,19 +60,21 @@ export async function requestVideoGeneration(config: AiConfig, prompt: string, r
 
 export async function createVideoGenerationTask(config: AiConfig, prompt: string, references: ReferenceImage[] = [], videoReferences: ReferenceVideo[] = [], audioReferences: ReferenceAudio[] = []): Promise<VideoGenerationTask> {
     const model = (config.model || config.videoModel).trim();
-    assertVideoConfig(config, model);
-    if (isSeedanceVideoConfig({ ...config, model })) {
-        return createSeedanceTask(config, model, prompt, references, videoReferences, audioReferences);
+    const requestConfig = resolveRequestConfig(config, model);
+    assertVideoConfig(requestConfig, model);
+    if (isSeedanceVideoConfig({ ...requestConfig, model })) {
+        return createSeedanceTask(requestConfig, model, prompt, references, videoReferences, audioReferences);
     }
     if (videoReferences.length || audioReferences.length) {
         throw new Error("当前视频接口不支持参考视频或参考音频，请切换到 Seedance 2.0 / 火山 Agent Plan 模型，或移除参考素材");
     }
-    return createOpenAIVideoTask(config, model, prompt, references);
+    return createOpenAIVideoTask(requestConfig, model, prompt, references);
 }
 
 export async function pollVideoGenerationTask(config: AiConfig, task: VideoGenerationTask): Promise<VideoGenerationTaskState> {
-    assertVideoConfig(config, task.model);
-    return task.provider === "seedance" ? pollSeedanceTask(config, task) : pollOpenAIVideoTask(config, task);
+    const requestConfig = resolveRequestConfig(config, task.model);
+    assertVideoConfig(requestConfig, task.model);
+    return task.provider === "seedance" ? pollSeedanceTask(requestConfig, task) : pollOpenAIVideoTask(requestConfig, task);
 }
 
 export async function storeGeneratedVideo(result: VideoGenerationResult): Promise<UploadedFile> {

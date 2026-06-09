@@ -2,7 +2,7 @@ import axios from "axios";
 
 import { audioMimeType, normalizeAudioFormatValue, normalizeAudioSpeedValue, normalizeAudioVoiceValue } from "@/lib/audio-generation";
 import { uploadMediaFile, type UploadedFile } from "@/services/file-storage";
-import { buildApiUrl, type AiConfig } from "@/stores/use-config-store";
+import { buildApiUrl, resolveRequestConfig, type AiConfig } from "@/stores/use-config-store";
 import { useUserStore } from "@/stores/use-user-store";
 
 function aiApiUrl(config: AiConfig, path: string) {
@@ -28,25 +28,26 @@ function refreshRemoteUser(config: AiConfig) {
 
 export async function requestAudioGeneration(config: AiConfig, prompt: string): Promise<Blob> {
     const model = (config.model || config.audioModel).trim();
-    assertAudioConfig(config, model);
-    const format = normalizeAudioFormatValue(config.audioFormat);
-    const instructions = config.audioInstructions.trim();
+    const requestConfig = resolveRequestConfig(config, model);
+    assertAudioConfig(requestConfig, model);
+    const format = normalizeAudioFormatValue(requestConfig.audioFormat);
+    const instructions = requestConfig.audioInstructions.trim();
 
     try {
         const response = await axios.post<Blob>(
-            aiApiUrl(config, "/audio/speech"),
+            aiApiUrl(requestConfig, "/audio/speech"),
             {
                 model,
                 input: prompt,
-                voice: normalizeAudioVoiceValue(config.audioVoice),
+                voice: normalizeAudioVoiceValue(requestConfig.audioVoice),
                 response_format: format,
-                speed: Number(normalizeAudioSpeedValue(config.audioSpeed)),
+                speed: Number(normalizeAudioSpeedValue(requestConfig.audioSpeed)),
                 ...(instructions ? { instructions } : {}),
             },
-            { headers: aiHeaders(config), responseType: "blob" },
+            { headers: aiHeaders(requestConfig), responseType: "blob" },
         );
         await assertAudioBlob(response.data);
-        refreshRemoteUser(config);
+        refreshRemoteUser(requestConfig);
         return response.data.type.startsWith("audio/") ? response.data : new Blob([response.data], { type: audioMimeType(format) });
     } catch (error) {
         throw new Error(readAxiosError(error, "音频生成失败"));

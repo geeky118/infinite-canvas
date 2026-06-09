@@ -5,7 +5,7 @@ import { useEffect, useRef } from "react";
 import { usePathname } from "next/navigation";
 import { App } from "antd";
 
-import { useConfigStore } from "@/stores/use-config-store";
+import { normalizeLocalChannel, useConfigStore } from "@/stores/use-config-store";
 import { useUserStore } from "@/stores/use-user-store";
 
 export function ClientRootInit({ children }: { children: ReactNode }) {
@@ -15,6 +15,7 @@ export function ClientRootInit({ children }: { children: ReactNode }) {
     const hydrateUser = useUserStore((state) => state.hydrateUser);
     const loadPublicSettings = useConfigStore((state) => state.loadPublicSettings);
     const publicSettings = useConfigStore((state) => state.publicSettings);
+    const config = useConfigStore((state) => state.config);
     const updateConfig = useConfigStore((state) => state.updateConfig);
     const openConfigDialog = useConfigStore((state) => state.openConfigDialog);
     const isLoginPage = pathname === "/login" || pathname === "/admin/login";
@@ -48,8 +49,21 @@ export function ClientRootInit({ children }: { children: ReactNode }) {
         updateConfig("channelMode", "local");
         if (baseUrl) updateConfig("baseUrl", baseUrl);
         if (apiKey) updateConfig("apiKey", apiKey);
+        updateConfig(
+            "localChannels",
+            [
+                normalizeLocalChannel({
+                    ...(config.localChannels[0] || {}),
+                    id: config.localChannels[0]?.id || "openai",
+                    name: config.localChannels[0]?.name || "OpenAI",
+                    baseUrl: baseUrl || config.localChannels[0]?.baseUrl || config.baseUrl,
+                    apiKey: apiKey || config.localChannels[0]?.apiKey || config.apiKey,
+                }),
+                ...config.localChannels.slice(1),
+            ],
+        );
         openConfigDialog(false);
-    }, [message, openConfigDialog, publicSettings, updateConfig]);
+    }, [config, message, openConfigDialog, publicSettings, updateConfig]);
 
     return <>{children}</>;
 }

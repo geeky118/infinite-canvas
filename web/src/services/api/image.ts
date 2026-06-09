@@ -1,6 +1,6 @@
 import axios from "axios";
 
-import { buildApiUrl, type AiConfig } from "@/stores/use-config-store";
+import { buildApiUrl, resolveRequestConfig, type AiConfig } from "@/stores/use-config-store";
 import { useUserStore } from "@/stores/use-user-store";
 import { nanoid } from "nanoid";
 import { dataUrlToFile } from "@/lib/image-utils";
@@ -39,6 +39,34 @@ const IMAGE_MAX_PIXELS = 8294400;
 const IMAGE_MAX_EDGE = 3840;
 const IMAGE_MAX_RATIO = 3;
 const IMAGE_OUTPUT_FORMAT = "png";
+const GROK_IMAGE_SIZES = new Set(["1024x1024", "1024x1792", "1280x720", "1792x1024", "720x1280"]);
+
+function normalizeImageRequestModel(model: string) {
+    return model === "grok-imagine-1.0-fast" || model === "grok-imagine-1.0-edit" ? "grok-imagine-1.0" : model;
+}
+
+function normalizeImageEditRequestModel(model: string) {
+    return isGrokImageModel(model) ? "grok-imagine-1.0-edit" : model;
+}
+
+function isGrokImageModel(model: string) {
+    return model.startsWith("grok-imagine-1.0");
+}
+
+function normalizeImageRequestCount(model: string, count: string) {
+    const n = Math.max(1, Math.min(15, Math.floor(Math.abs(Number(count)) || 1)));
+    return isGrokImageModel(model) ? 1 : n;
+}
+
+function imageResponseFormat(model: string) {
+    return isGrokImageModel(model) ? "url" : "b64_json";
+}
+
+function normalizeGrokPrompt(prompt: string) {
+    const value = prompt.trim();
+    if (!value) return value;
+    return `生成一张图片：${value}`;
+}
 
 function normalizeQuality(quality: string) {
     const value = quality.trim().toLowerCase();
@@ -108,6 +136,34 @@ function resolveRequestSize(quality: string | undefined, size: string) {
     throw new Error("图像尺寸格式不支持，请使用 auto、9:16 或 1024x1024");
 }
 
+function resolveGrokRequestSize(size: string) {
+    const value = size.trim().toLowerCase();
+    if (!value || value === "auto") return "1024x1024";
+    const dimensions = parseImageDimensions(value);
+    if (dimensions) {
+        const explicit = `${dimensions.width}x${dimensions.height}`;
+        if (GROK_IMAGE_SIZES.has(explicit)) return explicit;
+        return closestGrokSize(dimensions.width / dimensions.height);
+    }
+    if (value.includes(":")) {
+        const ratio = parseImageRatio(value);
+        return closestGrokSize(ratio.width / ratio.height);
+    }
+    return "1024x1024";
+}
+
+function closestGrokSize(ratio: number) {
+    if (!Number.isFinite(ratio) || ratio <= 0) return "1024x1024";
+    const candidates = [
+        { size: "1024x1024", ratio: 1 },
+        { size: "1024x1792", ratio: 1024 / 1792 },
+        { size: "720x1280", ratio: 720 / 1280 },
+        { size: "1792x1024", ratio: 1792 / 1024 },
+        { size: "1280x720", ratio: 1280 / 720 },
+    ];
+    return candidates.reduce((best, item) => (Math.abs(item.ratio - ratio) < Math.abs(best.ratio - ratio) ? item : best)).size;
+}
+
 function resolveImageDataUrl(item: Record<string, unknown>) {
     if (typeof item.b64_json === "string" && item.b64_json) {
         return `data:image/png;base64,${item.b64_json}`;
@@ -136,8 +192,9 @@ function parseImagePayload(payload: ImageApiResponse) {
 }
 
 function readAxiosError(error: unknown, fallback: string) {
-    if (axios.isAxiosError<{ error?: { message?: string }; msg?: string; code?: number }>(error)) {
+    if (axios.isAxiosError<{ error?: { message?: string }; msg?: string; code?: number } | string>(error)) {
         const responseData = error.response?.data;
+        if (typeof responseData === "string") return responseData || readStatusError(error.response?.status, fallback);
         return responseData?.msg || responseData?.error?.message || readStatusError(error.response?.status, fallback);
     }
     return error instanceof Error ? error.message : fallback;
@@ -195,27 +252,30 @@ function withSystemMessage(config: AiConfig, messages: ChatCompletionMessage[]) 
 }
 
 export async function requestGeneration(config: AiConfig, prompt: string) {
-    const n = Math.max(1, Math.min(15, Math.floor(Math.abs(Number(config.count)) || 1)));
-    const quality = normalizeQuality(config.quality);
-    const requestSize = resolveRequestSize(quality, config.size);
+    const requestConfig = resolveRequestConfig(config, config.model);
+    const requestModel = normalizeImageRequestModel(requestConfig.model);
+    const n = normalizeImageRequestCount(requestModel, config.count);
+    const isGrok = isGrokImageModel(requestModel);
+    const quality = isGrok ? undefined : normalizeQuality(requestConfig.quality);
+    const requestSize = isGrok ? resolveGrokRequestSize(requestConfig.size) : resolveRequestSize(quality, requestConfig.size);
     try {
         const response = await axios.post<ImageApiResponse>(
-            aiApiUrl(config, "/images/generations"),
+            aiApiUrl(requestConfig, "/images/generations"),
             {
-                model: config.model,
-                prompt: withSystemPrompt(config, prompt),
+                model: requestModel,
+                prompt: withSystemPrompt(requestConfig, isGrok ? normalizeGrokPrompt(prompt) : prompt),
                 n,
                 ...(quality ? { quality } : {}),
                 ...(requestSize ? { size: requestSize } : {}),
-                response_format: "b64_json",
+                response_format: imageResponseFormat(requestModel),
                 output_format: IMAGE_OUTPUT_FORMAT,
             },
             {
-                headers: aiHeaders(config, "application/json"),
+                headers: aiHeaders(requestConfig, "application/json"),
             },
         );
         const images = parseImagePayload(response.data);
-        refreshRemoteUser(config);
+        refreshRemoteUser(requestConfig);
         return images;
     } catch (error) {
         throw new Error(readAxiosError(error, "请求失败"));
@@ -223,15 +283,18 @@ export async function requestGeneration(config: AiConfig, prompt: string) {
 }
 
 export async function requestEdit(config: AiConfig, prompt: string, references: ReferenceImage[], mask?: ReferenceImage) {
-    const n = Math.max(1, Math.min(15, Math.floor(Math.abs(Number(config.count)) || 1)));
-    const quality = normalizeQuality(config.quality);
-    const requestSize = resolveRequestSize(quality, config.size);
-    const requestPrompt = buildImageReferencePromptText(prompt, references);
+    const requestConfig = resolveRequestConfig(config, config.model);
+    const requestModel = normalizeImageEditRequestModel(requestConfig.model);
+    const n = normalizeImageRequestCount(requestModel, config.count);
+    const isGrok = isGrokImageModel(requestModel);
+    const quality = isGrok ? undefined : normalizeQuality(requestConfig.quality);
+    const requestSize = isGrok ? resolveGrokRequestSize(requestConfig.size) : resolveRequestSize(quality, requestConfig.size);
+    const requestPrompt = buildImageReferencePromptText(isGrok ? normalizeGrokPrompt(prompt) : prompt, references);
     const formData = new FormData();
-    formData.set("model", config.model);
-    formData.set("prompt", withSystemPrompt(config, requestPrompt));
+    formData.set("model", requestModel);
+    formData.set("prompt", withSystemPrompt(requestConfig, requestPrompt));
     formData.set("n", String(n));
-    formData.set("response_format", "b64_json");
+    formData.set("response_format", imageResponseFormat(requestModel));
     formData.set("output_format", IMAGE_OUTPUT_FORMAT);
     if (quality) {
         formData.set("quality", quality);
@@ -244,9 +307,9 @@ export async function requestEdit(config: AiConfig, prompt: string, references: 
     if (mask) formData.set("mask", dataUrlToFile(mask));
 
     try {
-        const response = await axios.post<ImageApiResponse>(aiApiUrl(config, "/images/edits"), formData, { headers: aiHeaders(config) });
+        const response = await axios.post<ImageApiResponse>(aiApiUrl(requestConfig, "/images/edits"), formData, { headers: aiHeaders(requestConfig) });
         const images = parseImagePayload(response.data);
-        refreshRemoteUser(config);
+        refreshRemoteUser(requestConfig);
         return images;
     } catch (error) {
         throw new Error(readAxiosError(error, "请求失败"));
@@ -254,21 +317,22 @@ export async function requestEdit(config: AiConfig, prompt: string, references: 
 }
 
 export async function requestImageQuestion(config: AiConfig, messages: ChatCompletionMessage[], onDelta: (text: string) => void) {
+    const requestConfig = resolveRequestConfig(config, config.model);
     let buffer = "";
     let answer = "";
     let processedLength = 0;
 
     try {
         const response = await axios.post(
-            aiApiUrl(config, "/chat/completions"),
+            aiApiUrl(requestConfig, "/chat/completions"),
             {
-                model: config.model,
-                messages: withSystemMessage(config, messages),
+                model: requestConfig.model,
+                messages: withSystemMessage(requestConfig, messages),
                 stream: true,
             },
             {
                 headers: {
-                    ...aiHeaders(config, "application/json"),
+                    ...aiHeaders(requestConfig, "application/json"),
                 } as Record<string, string>,
                 responseType: "text",
                 onDownloadProgress: (event) => {
@@ -311,18 +375,18 @@ export async function requestImageQuestion(config: AiConfig, messages: ChatCompl
     } catch (error) {
         throw new Error(readAxiosError(error, "请求失败"));
     }
-    refreshRemoteUser(config);
+    refreshRemoteUser(requestConfig);
     return answer || "没有返回内容";
 }
 
 export async function fetchImageModels(config: AiConfig) {
     if (config.channelMode === "remote") return config.models;
     try {
-        const response = await axios.get<{ data?: Array<{ id?: string }>; error?: { message?: string } }>(buildApiUrl(config.baseUrl, "/models"), {
-            headers: {
-                Authorization: `Bearer ${config.apiKey}`,
-            },
+        const response = await axios.post<{ data?: Array<{ id?: string }>; error?: { message?: string } }>("/model-proxy", {
+            url: buildApiUrl(config.baseUrl, "/models"),
+            apiKey: config.apiKey,
         });
+        if (response.data.error?.message) throw new Error(response.data.error.message);
         return (response.data.data || [])
             .map((model) => model.id)
             .filter((id): id is string => Boolean(id))

@@ -7,10 +7,23 @@ import { persist } from "zustand/middleware";
 import { apiGet } from "@/services/api/request";
 import type { AdminPublicSettings } from "@/services/api/admin";
 
+export type AiLocalChannel = {
+    id: string;
+    name: string;
+    baseUrl: string;
+    apiKey: string;
+    models: string[];
+    imageModels: string[];
+    videoModels: string[];
+    textModels: string[];
+    audioModels: string[];
+};
+
 export type AiConfig = {
     channelMode: "remote" | "local";
     baseUrl: string;
     apiKey: string;
+    localChannels: AiLocalChannel[];
     model: string;
     imageModel: string;
     videoModel: string;
@@ -52,6 +65,7 @@ export const defaultConfig: AiConfig = {
     channelMode: "local",
     baseUrl: "https://api.openai.com",
     apiKey: "",
+    localChannels: readDefaultLocalChannels(),
     model: "gpt-image-2",
     imageModel: "gpt-image-2",
     videoModel: "grok-imagine-video",
@@ -104,7 +118,7 @@ type ConfigStore = {
 
 function resolveEffectiveConfig(config: AiConfig, modelChannel: AdminPublicSettings["modelChannel"] | null) {
     const channelMode = modelChannel?.allowCustomChannel ? config.channelMode : "remote";
-    if (channelMode === "local" || !modelChannel) return { ...config, channelMode };
+    if (channelMode === "local" || !modelChannel) return resolveLocalEffectiveConfig({ ...config, channelMode });
     const models = modelChannel.availableModels;
     const textModels = filterModelsByCapability(models, "text");
     const imageModels = filterModelsByCapability(models, "image");
@@ -147,7 +161,7 @@ function isVideoModelName(model: string) {
 
 function isImageModelName(model: string) {
     const value = model.toLowerCase();
-    return !isVideoModelName(model) && !isAudioModelName(model) && (value.includes("seedream") || value.includes("gpt-image") || value.includes("image") || value.includes("dall-e") || value.includes("dalle") || value.includes("imagen") || value.includes("flux") || value.includes("sdxl") || value.includes("stable-diffusion") || value.includes("midjourney"));
+    return !isVideoModelName(model) && !isAudioModelName(model) && (value.includes("grok-imagine") || value.includes("seedream") || value.includes("gpt-image") || value.includes("image") || value.includes("dall-e") || value.includes("dalle") || value.includes("imagen") || value.includes("flux") || value.includes("sdxl") || value.includes("stable-diffusion") || value.includes("midjourney"));
 }
 
 function isAudioModelName(model: string) {
@@ -172,8 +186,59 @@ export function filterModelsByCapability(models: string[], capability?: ModelCap
 }
 
 export function selectableModelsByCapability(config: AiConfig, capability?: ModelCapability) {
+    if (config.channelMode === "local" && config.localChannels.length) {
+        return Array.from(new Set(config.localChannels.flatMap((channel) => (capability ? channel[modelListKey(capability)] : channel.models)).filter(Boolean)));
+    }
     if (!capability) return config.models;
     return config[modelListKey(capability)];
+}
+
+function resolveLocalEffectiveConfig(config: AiConfig) {
+    const localChannels = normalizeLocalChannels(config);
+    const models = Array.from(new Set(localChannels.flatMap((channel) => channel.models)));
+    const imageModels = Array.from(new Set(localChannels.flatMap((channel) => channel.imageModels)));
+    const videoModels = Array.from(new Set(localChannels.flatMap((channel) => channel.videoModels)));
+    const textModels = Array.from(new Set(localChannels.flatMap((channel) => channel.textModels)));
+    const audioModels = Array.from(new Set(localChannels.flatMap((channel) => channel.audioModels)));
+    return {
+        ...config,
+        localChannels,
+        models,
+        imageModels,
+        videoModels,
+        textModels,
+        audioModels,
+        model: textModels.includes(config.model) ? config.model : config.model,
+        imageModel: imageModels.includes(config.imageModel) ? config.imageModel : imageModels[0] || config.imageModel,
+        videoModel: videoModels.includes(config.videoModel) ? config.videoModel : videoModels[0] || config.videoModel,
+        textModel: textModels.includes(config.textModel) ? config.textModel : textModels[0] || config.textModel,
+        audioModel: audioModels.includes(config.audioModel) ? config.audioModel : audioModels[0] || config.audioModel,
+    };
+}
+
+export function selectableModelOptionsByCapability(config: AiConfig, capability?: ModelCapability) {
+    if (config.channelMode !== "local" || !config.localChannels.length) {
+        return selectableModelsByCapability(config, capability).map((model) => ({ value: model, label: model }));
+    }
+    const seen = new Map<string, number>();
+    for (const channel of config.localChannels) {
+        const models = capability ? channel[modelListKey(capability)] : channel.models;
+        for (const model of models) seen.set(model, (seen.get(model) || 0) + 1);
+    }
+    const emitted = new Set<string>();
+    return config.localChannels.flatMap((channel) => {
+        const models = capability ? channel[modelListKey(capability)] : channel.models;
+        return models.flatMap((model) => {
+            if (emitted.has(model)) return [];
+            emitted.add(model);
+            return [
+                {
+                    value: model,
+                    label: seen.get(model)! > 1 ? `${model} · ${channel.name || "未命名渠道"}（优先）` : model,
+                },
+            ];
+        });
+    });
 }
 
 function modelListKey(capability: ModelCapability) {
@@ -181,7 +246,10 @@ function modelListKey(capability: ModelCapability) {
 }
 
 function isAiConfigReady(config: AiConfig, model: string) {
-    return Boolean(model.trim()) && (config.channelMode === "remote" || Boolean(config.baseUrl.trim() && config.apiKey.trim()));
+    if (!model.trim()) return false;
+    if (config.channelMode === "remote") return true;
+    const requestConfig = resolveRequestConfig(config, model);
+    return Boolean(requestConfig.baseUrl.trim() && requestConfig.apiKey.trim());
 }
 
 export const useConfigStore = create<ConfigStore>()(
@@ -229,12 +297,14 @@ export const useConfigStore = create<ConfigStore>()(
                 const persistedConfig = (persistedState.config || {}) as Partial<AiConfig>;
                 const persistedWebdav = (persistedState.webdav || {}) as Partial<WebdavSyncConfig>;
                 const config = { ...defaultConfig, ...persistedConfig };
+                const localChannels = normalizeLocalChannels(config);
                 return {
                     ...current,
                     webdav: { ...defaultWebdavSyncConfig, ...persistedWebdav },
                     config: {
                         ...config,
                         channelMode: config.channelMode || "remote",
+                        localChannels,
                         imageModel: config.imageModel || config.model,
                         videoModel: config.videoModel || "grok-imagine-video",
                         textModel: config.textModel || config.model,
@@ -275,6 +345,84 @@ export function buildApiUrl(baseUrl: string, path: string) {
     const lowerBaseUrl = normalizedBaseUrl.toLowerCase();
     const apiBaseUrl = lowerBaseUrl.endsWith("/v1") || lowerBaseUrl.endsWith("/api/v3") || lowerBaseUrl.endsWith("/api/plan/v3") ? normalizedBaseUrl : `${normalizedBaseUrl}/v1`;
     return `${apiBaseUrl}${path}`;
+}
+
+export function resolveRequestConfig(config: AiConfig, model?: string): AiConfig {
+    if (config.channelMode === "remote") return model ? { ...config, model } : config;
+    const selectedModel = (model || config.model).trim();
+    const channels = normalizeLocalChannels(config).filter((channel) => channel.baseUrl.trim() && channel.apiKey.trim());
+    const channel = channels.find((item) => channelHasModel(item, selectedModel)) || channels[0];
+    if (!channel) return model ? { ...config, model } : config;
+    return {
+        ...config,
+        model: selectedModel || config.model,
+        baseUrl: channel.baseUrl,
+        apiKey: channel.apiKey,
+    };
+}
+
+export function normalizeLocalChannels(config: Partial<AiConfig>) {
+    const channels = Array.isArray(config.localChannels) ? config.localChannels : [];
+    const normalized = channels.map(normalizeLocalChannel).filter((channel) => channel.baseUrl || channel.apiKey || channel.models.length);
+    const legacyBaseUrl = (config.baseUrl || "").trim();
+    const legacyApiKey = (config.apiKey || "").trim();
+    if (legacyBaseUrl || legacyApiKey) {
+        const hasLegacy = normalized.some((channel) => channel.baseUrl === legacyBaseUrl && channel.apiKey === legacyApiKey);
+        if (!hasLegacy) {
+            normalized.unshift(
+                normalizeLocalChannel({
+                    id: "openai",
+                    name: "OpenAI",
+                    baseUrl: legacyBaseUrl || defaultConfig.baseUrl,
+                    apiKey: legacyApiKey,
+                    models: config.models || [],
+                    imageModels: config.imageModels || [],
+                    videoModels: config.videoModels || [],
+                    textModels: config.textModels || [],
+                    audioModels: config.audioModels || [],
+                }),
+            );
+        }
+    }
+    for (const channel of readDefaultLocalChannels()) {
+        if (!normalized.some((item) => item.id === channel.id || (item.baseUrl === channel.baseUrl && item.apiKey === channel.apiKey))) normalized.push(channel);
+    }
+    return normalized.length ? normalized : [normalizeLocalChannel({ id: "openai", name: "OpenAI", baseUrl: defaultConfig.baseUrl, apiKey: "", models: [], imageModels: [], videoModels: [], textModels: [], audioModels: [] })];
+}
+
+export function normalizeLocalChannel(channel: Partial<AiLocalChannel>): AiLocalChannel {
+    const models = normalizeModelList(channel.models || []);
+    const imageModels = normalizeModelList(channel.imageModels || []);
+    const videoModels = normalizeModelList(channel.videoModels || []);
+    const textModels = normalizeModelList(channel.textModels || []);
+    const audioModels = normalizeModelList(channel.audioModels || []);
+    return {
+        id: channel.id || `channel-${Math.random().toString(36).slice(2, 10)}`,
+        name: (channel.name || "本地渠道").trim(),
+        baseUrl: (channel.baseUrl || "").trim(),
+        apiKey: (channel.apiKey || "").trim(),
+        models,
+        imageModels: imageModels.length ? imageModels : filterModelsByCapability(models, "image"),
+        videoModels: videoModels.length ? videoModels : filterModelsByCapability(models, "video"),
+        textModels: textModels.length ? textModels : filterModelsByCapability(models, "text"),
+        audioModels: audioModels.length ? audioModels : filterModelsByCapability(models, "audio"),
+    };
+}
+
+function channelHasModel(channel: AiLocalChannel, model: string) {
+    if (!model) return true;
+    return [channel.models, channel.imageModels, channel.videoModels, channel.textModels, channel.audioModels].some((models) => models.includes(model));
+}
+
+function readDefaultLocalChannels() {
+    const raw = process.env.NEXT_PUBLIC_DEFAULT_LOCAL_CHANNELS || "";
+    if (!raw) return [];
+    try {
+        const items = JSON.parse(raw) as Partial<AiLocalChannel>[];
+        return Array.isArray(items) ? items.map(normalizeLocalChannel) : [];
+    } catch {
+        return [];
+    }
 }
 
 function normalizeArkPlanBaseUrl(baseUrl: string) {
