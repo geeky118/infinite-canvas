@@ -283,8 +283,8 @@ export async function requestGeneration(config: AiConfig, prompt: string) {
 }
 
 export async function requestEdit(config: AiConfig, prompt: string, references: ReferenceImage[], mask?: ReferenceImage) {
-    const requestConfig = resolveRequestConfig(config, config.model);
-    const requestModel = normalizeImageEditRequestModel(requestConfig.model);
+    const requestModel = normalizeImageEditRequestModel(config.model);
+    const requestConfig = resolveRequestConfig(config, requestModel);
     const n = normalizeImageRequestCount(requestModel, config.count);
     const isGrok = isGrokImageModel(requestModel);
     const quality = isGrok ? undefined : normalizeQuality(requestConfig.quality);

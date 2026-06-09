@@ -109,6 +109,7 @@ type ConfigStore = {
     shouldPromptContinue: boolean;
     updateConfig: <K extends keyof AiConfig>(key: K, value: AiConfig[K]) => void;
     updateWebdavConfig: <K extends keyof WebdavSyncConfig>(key: K, value: WebdavSyncConfig[K]) => void;
+    replaceConfig: (config: Partial<AiConfig>) => void;
     loadPublicSettings: () => Promise<void>;
     isAiConfigReady: (config: AiConfig, model: string) => boolean;
     openConfigDialog: (shouldPromptContinue?: boolean) => void;
@@ -275,6 +276,7 @@ export const useConfigStore = create<ConfigStore>()(
                         [key]: value,
                     },
                 })),
+            replaceConfig: (config) => set({ config: normalizeConfig(config) }),
             loadPublicSettings: async () => {
                 if (get().isPublicSettingsLoading) return;
                 set({ isPublicSettingsLoading: true });
@@ -296,38 +298,42 @@ export const useConfigStore = create<ConfigStore>()(
                 const persistedState = (persisted || {}) as Partial<ConfigStore>;
                 const persistedConfig = (persistedState.config || {}) as Partial<AiConfig>;
                 const persistedWebdav = (persistedState.webdav || {}) as Partial<WebdavSyncConfig>;
-                const config = { ...defaultConfig, ...persistedConfig };
-                const localChannels = normalizeLocalChannels(config);
                 return {
                     ...current,
                     webdav: { ...defaultWebdavSyncConfig, ...persistedWebdav },
-                    config: {
-                        ...config,
-                        channelMode: config.channelMode || "remote",
-                        localChannels,
-                        imageModel: config.imageModel || config.model,
-                        videoModel: config.videoModel || "grok-imagine-video",
-                        textModel: config.textModel || config.model,
-                        audioModel: config.audioModel || defaultConfig.audioModel,
-                        audioVoice: config.audioVoice || defaultConfig.audioVoice,
-                        audioFormat: config.audioFormat || defaultConfig.audioFormat,
-                        audioSpeed: config.audioSpeed || defaultConfig.audioSpeed,
-                        audioInstructions: config.audioInstructions || "",
-                        videoSeconds: config.videoSeconds || "6",
-                        vquality: config.vquality || "720",
-                        videoGenerateAudio: config.videoGenerateAudio || "true",
-                        videoWatermark: config.videoWatermark || "false",
-                        canvasImageCount: config.canvasImageCount || "3",
-                        imageModels: Array.isArray(persistedConfig.imageModels) ? normalizeModelList(config.imageModels) : filterModelsByCapability(config.models, "image"),
-                        videoModels: Array.isArray(persistedConfig.videoModels) ? normalizeModelList(config.videoModels) : filterModelsByCapability(config.models, "video"),
-                        textModels: Array.isArray(persistedConfig.textModels) ? normalizeModelList(config.textModels) : filterModelsByCapability(config.models, "text"),
-                        audioModels: Array.isArray(persistedConfig.audioModels) ? normalizeModelList(config.audioModels) : filterModelsByCapability(config.models, "audio"),
-                    },
+                    config: normalizeConfig(persistedConfig),
                 };
             },
         },
     ),
 );
+
+function normalizeConfig(source: Partial<AiConfig>) {
+    const config = { ...defaultConfig, ...source };
+    const localChannels = normalizeLocalChannels(config);
+    return {
+        ...config,
+        channelMode: config.channelMode || "remote",
+        localChannels,
+        imageModel: config.imageModel || config.model,
+        videoModel: config.videoModel || "grok-imagine-video",
+        textModel: config.textModel || config.model,
+        audioModel: config.audioModel || defaultConfig.audioModel,
+        audioVoice: config.audioVoice || defaultConfig.audioVoice,
+        audioFormat: config.audioFormat || defaultConfig.audioFormat,
+        audioSpeed: config.audioSpeed || defaultConfig.audioSpeed,
+        audioInstructions: config.audioInstructions || "",
+        videoSeconds: config.videoSeconds || "6",
+        vquality: config.vquality || "720",
+        videoGenerateAudio: config.videoGenerateAudio || "true",
+        videoWatermark: config.videoWatermark || "false",
+        canvasImageCount: config.canvasImageCount || "3",
+        imageModels: Array.isArray(source.imageModels) ? normalizeModelList(config.imageModels) : filterModelsByCapability(config.models, "image"),
+        videoModels: Array.isArray(source.videoModels) ? normalizeModelList(config.videoModels) : filterModelsByCapability(config.models, "video"),
+        textModels: Array.isArray(source.textModels) ? normalizeModelList(config.textModels) : filterModelsByCapability(config.models, "text"),
+        audioModels: Array.isArray(source.audioModels) ? normalizeModelList(config.audioModels) : filterModelsByCapability(config.models, "audio"),
+    };
+}
 
 function normalizeModelList(models: string[]) {
     return Array.from(new Set((models || []).map((model) => model.trim()).filter(Boolean)));
@@ -411,7 +417,15 @@ export function normalizeLocalChannel(channel: Partial<AiLocalChannel>): AiLocal
 
 function channelHasModel(channel: AiLocalChannel, model: string) {
     if (!model) return true;
-    return [channel.models, channel.imageModels, channel.videoModels, channel.textModels, channel.audioModels].some((models) => models.includes(model));
+    const aliases = modelAliases(model);
+    return [channel.models, channel.imageModels, channel.videoModels, channel.textModels, channel.audioModels].some((models) => aliases.some((alias) => models.includes(alias)));
+}
+
+function modelAliases(model: string) {
+    if (model === "grok-imagine-1.0" || model === "grok-imagine-1.0-fast" || model === "grok-imagine-1.0-edit") {
+        return ["grok-imagine-1.0", "grok-imagine-1.0-fast", "grok-imagine-1.0-edit"];
+    }
+    return [model];
 }
 
 function readDefaultLocalChannels() {

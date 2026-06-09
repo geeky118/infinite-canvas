@@ -25,6 +25,7 @@
 
 - [系统总览](architecture/system-overview.md)
 - [验证运行手册](runbooks/verification.md)
+- [ChatGPT2API 服务器画布部署](runbooks/chatgpt2api-canvas-deploy.md)
 - [执行计划说明](exec-plans/README.md)
 - [执行计划模板](exec-plans/TEMPLATE.md)
 

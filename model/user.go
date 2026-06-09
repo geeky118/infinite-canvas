@@ -100,3 +100,13 @@ type CreditLogList struct {
 	Items []CreditLog `json:"items"`
 	Total int         `json:"total"`
 }
+
+// UserData 保存登录用户的跨设备配置和业务数据。
+type UserData struct {
+	ID        string `json:"id" gorm:"primaryKey"`
+	UserID    string `json:"userId" gorm:"uniqueIndex:idx_user_data_domain"`
+	Domain    string `json:"domain" gorm:"uniqueIndex:idx_user_data_domain;size:64"`
+	Payload   string `json:"payload" gorm:"type:text"`
+	CreatedAt string `json:"createdAt"`
+	UpdatedAt string `json:"updatedAt"`
+}

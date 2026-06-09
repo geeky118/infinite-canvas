@@ -21,6 +21,7 @@ description: 当前后端主要数据表与字段说明
 
 - `users`
 - `credit_logs`
+- `user_data`
 - `prompts`
 - `assets`
 - `settings`
@@ -198,3 +199,16 @@ description: 当前后端主要数据表与字段说明
 | `admin_adjust` | 后台手动调整 |
 | `ai_consume` | 调用后端模型接口消费 |
 | `ai_refund` | 后端模型接口调用失败返还 |
+
+### user_data
+
+登录用户跨设备数据表。当前用于保存用户画布项目、模型配置和“我的素材”，未登录用户仍使用浏览器本地存储。提示词中心内容保存在 `prompts` 表；用户加入“我的素材”的提示词会作为文本素材随 `assets` 域同步。
+
+| 字段 | 类型 | 说明 |
+| --- | --- | --- |
+| `id` | string | 主键 |
+| `user_id` | string | 用户 ID，与 `domain` 组成唯一索引 |
+| `domain` | string | 数据域，当前支持 `canvas`、`ai-config`、`assets` |
+| `payload` | json | 数据内容 |
+| `created_at` | string | 创建时间 |
+| `updated_at` | string | 更新时间 |
