@@ -16,7 +16,10 @@ func ListPrompts(q model.Query) (model.PromptList, error) {
 	if err != nil {
 		return model.PromptList{}, err
 	}
-	categories := promptCategoryCodes(ListPromptCategories())
+	categories, err := repository.ListPromptCategoryCodesWithPrompts()
+	if err != nil {
+		return model.PromptList{}, err
+	}
 	return model.PromptList{Items: items, Tags: tags, Categories: categories, Total: int(total)}, nil
 }
 
@@ -53,14 +56,4 @@ func DeletePrompts(ids []string) error {
 		return nil
 	}
 	return repository.DeletePrompts(ids)
-}
-
-func promptCategoryCodes(items []model.PromptCategory) []string {
-	codes := []string{}
-	for _, item := range items {
-		if item.Category != "" {
-			codes = append(codes, item.Category)
-		}
-	}
-	return codes
 }

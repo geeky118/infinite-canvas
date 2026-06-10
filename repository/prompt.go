@@ -2,6 +2,8 @@ package repository
 
 import (
 	"errors"
+	"sort"
+	"strings"
 
 	"github.com/basketikun/infinite-canvas/model"
 	"gorm.io/gorm"
@@ -27,6 +29,36 @@ func PromptCategoryByCode(category string) (model.PromptCategory, bool) {
 // ListPromptCategories 返回内置提示词分类。
 func ListPromptCategories() ([]model.PromptCategory, error) {
 	return PromptCategories(), nil
+}
+
+// ListPromptCategoryCodesWithPrompts 返回当前已有提示词数据的分类编码。
+func ListPromptCategoryCodesWithPrompts() ([]string, error) {
+	db, err := DB()
+	if err != nil {
+		return nil, err
+	}
+	var savedCodes []string
+	if err := db.Model(&model.Prompt{}).Where("category <> ''").Group("category").Pluck("category", &savedCodes).Error; err != nil {
+		return nil, err
+	}
+	seen := map[string]bool{}
+	for _, code := range savedCodes {
+		seen[code] = true
+	}
+	codes := []string{}
+	for _, item := range PromptCategories() {
+		if seen[item.Category] {
+			codes = append(codes, item.Category)
+			delete(seen, item.Category)
+		}
+	}
+	for _, code := range savedCodes {
+		if seen[code] {
+			codes = append(codes, code)
+			delete(seen, code)
+		}
+	}
+	return codes, nil
 }
 
 // ListPrompts 按查询条件返回提示词分页列表。
@@ -75,6 +107,19 @@ func ListPromptTags(q model.Query) ([]string, error) {
 	return promptTagsFromItems(items), nil
 }
 
+// ListPromptTextsExcludingCategory 返回其它分类已保存的提示词正文，用于远程源入库前去重。
+func ListPromptTextsExcludingCategory(category string) ([]string, error) {
+	db, err := DB()
+	if err != nil {
+		return nil, err
+	}
+	var prompts []string
+	if err := db.Model(&model.Prompt{}).Where("category <> ?", category).Pluck("prompt", &prompts).Error; err != nil {
+		return nil, err
+	}
+	return prompts, nil
+}
+
 // SavePrompt 保存提示词，并在更新时保留原创建时间。
 func SavePrompt(item model.Prompt) (model.Prompt, error) {
 	db, err := DB()
@@ -119,14 +164,82 @@ func ReplacePromptCategory(category model.PromptCategory, items []model.Prompt) 
 			return err
 		}
 		if len(items) == 0 {
-			return nil
+			return deleteDuplicatePrompts(tx)
 		}
 		for i := range items {
 			items[i].Category = category.Category
 			items[i].GithubURL = ""
 		}
-		return tx.Create(&items).Error
+		if err := tx.CreateInBatches(&items, 200).Error; err != nil {
+			return err
+		}
+		return deleteDuplicatePrompts(tx)
 	})
+}
+
+// deleteDuplicatePrompts 清理全库重复提示词，防止远程源定时同步后再次写出重复数据。
+func deleteDuplicatePrompts(tx *gorm.DB) error {
+	var items []model.Prompt
+	if err := tx.Select("id", "category", "prompt", "created_at").Find(&items).Error; err != nil {
+		return err
+	}
+	rank := promptCategoryRank()
+	groups := map[string][]model.Prompt{}
+	for _, item := range items {
+		key := promptDedupeKey(item.Prompt)
+		if key != "" {
+			groups[key] = append(groups[key], item)
+		}
+	}
+	ids := []string{}
+	for _, group := range groups {
+		if len(group) <= 1 {
+			continue
+		}
+		sort.SliceStable(group, func(i, j int) bool {
+			left := rank[group[i].Category]
+			if left == 0 {
+				left = len(rank) + 1
+			}
+			right := rank[group[j].Category]
+			if right == 0 {
+				right = len(rank) + 1
+			}
+			if left != right {
+				return left < right
+			}
+			if group[i].CreatedAt != group[j].CreatedAt {
+				return group[i].CreatedAt < group[j].CreatedAt
+			}
+			return group[i].ID < group[j].ID
+		})
+		for _, item := range group[1:] {
+			ids = append(ids, item.ID)
+		}
+	}
+	for len(ids) > 0 {
+		end := 500
+		if len(ids) < end {
+			end = len(ids)
+		}
+		if err := tx.Delete(&model.Prompt{}, "id IN ?", ids[:end]).Error; err != nil {
+			return err
+		}
+		ids = ids[end:]
+	}
+	return nil
+}
+
+func promptCategoryRank() map[string]int {
+	result := map[string]int{}
+	for i, item := range PromptCategories() {
+		result[item.Category] = i + 1
+	}
+	return result
+}
+
+func promptDedupeKey(prompt string) string {
+	return strings.Join(strings.Fields(strings.ToLower(strings.TrimSpace(prompt))), " ")
 }
 
 // applyPromptFilters 应用提示词列表的搜索条件。

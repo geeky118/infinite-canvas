@@ -221,8 +221,32 @@ function parseStreamChunk(chunk: string, onDelta: (value: string) => void) {
 }
 
 function withSystemPrompt(config: AiConfig, prompt: string) {
-    const systemPrompt = config.systemPrompt.trim();
-    return systemPrompt ? `${systemPrompt}\n\n${prompt}` : prompt;
+    const systemPrompt = sanitizeImageSystemPrompt(config.systemPrompt);
+    if (!systemPrompt) return prompt;
+    const payload = parsePromptJson(prompt);
+    const contextText = `项目视觉上下文（只用于画风、角色一致性和创作边界，不要求输出文字或 Markdown）：\n${systemPrompt}`;
+    if (!payload) return `${contextText}\n\n${prompt}`;
+    return JSON.stringify({ ...payload, project_system_prompt: systemPrompt, project_system_prompt_usage: "只用于画风、角色一致性和创作边界，不要求输出文字或 Markdown" }, null, 2);
+}
+
+function sanitizeImageSystemPrompt(value: string) {
+    return value
+        .split(/\r?\n/)
+        .map((line) => line.trim())
+        .filter((line) => line && !/(输出格式|示例输出|正文|可用图片任务|Markdown|提示词：|负提示词|回答|只文字对话|复制|每次输出|工作流程|确认|主题设计|分集规划|逐集创作|迭代优化)/i.test(line))
+        .join("\n")
+        .replace(/\n{3,}/g, "\n\n")
+        .trim()
+        .slice(0, 2000);
+}
+
+function parsePromptJson(value: string): Record<string, unknown> | null {
+    try {
+        const payload = JSON.parse(value.trim());
+        return payload && typeof payload === "object" && !Array.isArray(payload) ? (payload as Record<string, unknown>) : null;
+    } catch {
+        return null;
+    }
 }
 
 function aiApiUrl(config: AiConfig, path: string) {

@@ -26,10 +26,10 @@ export default function CanvasPage() {
     const selectedIds = useCanvasUiStore((state) => state.selectedProjectIds);
     const setDeleteIds = useCanvasUiStore((state) => state.setDeleteProjectIds);
 
-    const enterProject = (id: string) => {
-        router.push(`/canvas/${id}`);
+    const enterProject = (id: string, openSystemPrompt = false) => {
+        router.push(`/canvas/${id}${openSystemPrompt ? "?setup=system-prompt" : ""}`);
     };
-    const createAndEnter = () => enterProject(createProject(`无限画布 ${projects.length + 1}`));
+    const createAndEnter = () => enterProject(createProject(`无限画布 ${projects.length + 1}`), true);
     const importCanvas = async (file?: File) => {
         if (!file) return;
         try {

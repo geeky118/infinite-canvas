@@ -28,6 +28,13 @@ var promptCategories = []model.PromptCategory{
 	{Category: "youmind-gpt-image-2", Name: "YouMind GPT Image 2", Description: "YouMind OpenLab 的 GPT Image 2 中文提示词分类", GithubURL: "https://github.com/YouMind-OpenLab/awesome-gpt-image-2", Remote: true},
 	{Category: "youmind-nano-banana-pro", Name: "YouMind Nano Banana Pro", Description: "YouMind OpenLab 的 Nano Banana Pro 中文提示词分类", GithubURL: "https://github.com/YouMind-OpenLab/awesome-nano-banana-pro-prompts", Remote: true},
 	{Category: "davidwu-gpt-image2-prompts", Name: "awesome-gpt-image2-prompts", Description: "davidwuw0811-boop 整理的 GPT Image 2 提示词分类", GithubURL: "https://github.com/davidwuw0811-boop/awesome-gpt-image2-prompts", Remote: true},
+	{Category: "youmind-ai-image-prompts", Name: "YouMind AI Image Prompts", Description: "YouMind OpenLab 的结构化通用图片提示词库", GithubURL: "https://github.com/YouMind-OpenLab/ai-image-prompts-skill", Remote: true},
+	{Category: "nexra-ai-image-prompts", Name: "NeXra AI Image Prompts", Description: "NeXra 的结构化多语言图片提示词精选库", GithubURL: "https://github.com/NeXra-AI/awesome-ai-image-prompts", Remote: true},
+	{Category: "nanobanana-trending-prompts", Name: "NanoBanana Trending Prompts", Description: "X/Twitter 热门图片提示词集合", GithubURL: "https://github.com/jau123/nanobanana-trending-prompts", Remote: true},
+	{Category: "awesome-ai-image-prompts", Name: "Awesome AI Image Prompts", Description: "跨模型图片提示词分类合集", GithubURL: "https://github.com/devanshug2307/Awesome-AI-Image-Prompts", Remote: true},
+	{Category: "ultimate-gpt-image-nano-banana", Name: "Ultimate GPT Image & Nano Banana", Description: "ChatGPT Image 与 Nano Banana Pro 大型提示词合集", GithubURL: "https://github.com/0aicoder0/Ultimate-ChatGPT-Image-and-Nano-Banana-Pro-Collection", Remote: true},
+	{Category: "cliprise-product-photography", Name: "Cliprise Product Photography", Description: "电商产品摄影与广告创意提示词模板", GithubURL: "https://github.com/cliprise/awesome-ai-product-photography-prompts", Remote: true},
+	{Category: "aitools12-gpt-image-2", Name: "aitools12 GPT Image 2", Description: "中文 GPT Image 2 场景提示词案例库", GithubURL: "https://github.com/aitools12/awesome-gpt-image-2", Remote: true},
 }
 
 var (

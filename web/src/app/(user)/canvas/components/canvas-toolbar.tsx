@@ -1,7 +1,7 @@
 import type { CSSProperties, MouseEvent as ReactMouseEvent, ReactNode, RefObject } from "react";
 import { useRef, useState } from "react";
 import { Button, Segmented, Switch } from "antd";
-import { CircleDot, Eraser, FolderOpen, Grid2x2, Hand, Image as ImageIcon, Info, Library, Moon, Music2, Palette, Redo2, Settings2, Square, Sun, Trash2, Type, Undo2, Upload, Video } from "lucide-react";
+import { CircleDot, Eraser, FolderOpen, Grid2x2, Hand, Image as ImageIcon, Info, Library, MessageSquareText, Moon, Music2, Palette, Redo2, Settings2, Square, Sun, Trash2, Type, Undo2, Upload, Video } from "lucide-react";
 
 import { canvasThemes, type CanvasBackgroundMode, type CanvasColorTheme, type CanvasTheme } from "@/lib/canvas-theme";
 import { useThemeStore } from "@/stores/use-theme-store";
@@ -26,6 +26,7 @@ export function CanvasToolbar({
     onDeselect,
     onBackgroundModeChange,
     onShowImageInfoChange,
+    onProjectPromptOpen,
     onOpenAssetLibrary,
     onOpenMyAssets,
 }: {
@@ -47,6 +48,7 @@ export function CanvasToolbar({
     onDeselect: () => void;
     onBackgroundModeChange: (mode: CanvasBackgroundMode) => void;
     onShowImageInfoChange: (show: boolean) => void;
+    onProjectPromptOpen: () => void;
     onOpenAssetLibrary: () => void;
     onOpenMyAssets: () => void;
 }) {
@@ -190,6 +192,10 @@ export function CanvasToolbar({
                         </span>
                         <Switch size="small" checked={showImageInfo} onChange={onShowImageInfoChange} />
                     </div>
+                    <button type="button" className="mt-2 flex h-8 w-full items-center gap-2 rounded-lg px-1.5 text-left text-[11px] font-medium opacity-70 transition hover:opacity-100" style={{ color: theme.toolbar.item }} onClick={onProjectPromptOpen}>
+                        <MessageSquareText className="size-3.5" />
+                        项目系统提示词
+                    </button>
                 </div>
             ) : null}
         </div>

@@ -21,6 +21,8 @@ export default function PromptsPage() {
     const addAsset = useAssetStore((state) => state.addAsset);
     const copyText = useCopyText();
     const { query, items: promptItems, tags: promptTags, categories: promptCategoryOptions, total: totalPrompts } = usePromptList({ keyword: titleKeyword, tags: selectedTags, category: selectedCategory });
+    const hasPromptCategories = promptCategoryOptions.length > 1;
+    const hasPromptTags = promptTags.length > 1;
 
     useEffect(() => {
         if (query.isError) {
@@ -66,33 +68,39 @@ export default function PromptsPage() {
                             <div className="mx-auto mt-8 w-full max-w-2xl">
                                 <Input size="large" className="w-full" prefix={<Search className="size-4 text-stone-400" />} value={titleKeyword} placeholder="按标题查询" onChange={(event) => setTitleKeyword(event.target.value)} />
                             </div>
-                            <div className="mx-auto mt-6 grid max-w-6xl gap-3 text-left">
-                                <div className="grid gap-2 sm:grid-cols-[56px_minmax(0,1fr)] sm:items-start">
-                                    <div className="pt-2 text-xs font-medium text-stone-500 dark:text-stone-400">分类</div>
-                                    <div className="flex flex-wrap gap-2">
-                                        {promptCategoryOptions.map((category) => (
-                                            <Tag.CheckableTag key={category} checked={selectedCategory === category} className={cn("prompt-filter-tag", selectedCategory === category && "is-active")} onChange={() => setSelectedCategory(category)}>
-                                                {category}
-                                            </Tag.CheckableTag>
-                                        ))}
-                                    </div>
+                            {hasPromptCategories || hasPromptTags ? (
+                                <div className="mx-auto mt-6 grid max-w-6xl gap-3 text-left">
+                                    {hasPromptCategories ? (
+                                        <div className="grid gap-2 sm:grid-cols-[56px_minmax(0,1fr)] sm:items-start">
+                                            <div className="pt-2 text-xs font-medium text-stone-500 dark:text-stone-400">分类</div>
+                                            <div className="flex flex-wrap gap-2">
+                                                {promptCategoryOptions.map((category) => (
+                                                    <Tag.CheckableTag key={category} checked={selectedCategory === category} className={cn("prompt-filter-tag", selectedCategory === category && "is-active")} onChange={() => setSelectedCategory(category)}>
+                                                        {category}
+                                                    </Tag.CheckableTag>
+                                                ))}
+                                            </div>
+                                        </div>
+                                    ) : null}
+                                    {hasPromptTags ? (
+                                        <div className="grid gap-2 sm:grid-cols-[56px_minmax(0,1fr)] sm:items-start">
+                                            <div className="pt-2 text-xs font-medium text-stone-500 dark:text-stone-400">标签</div>
+                                            <div className="flex flex-wrap gap-2">
+                                                {promptTags.map((tag) => (
+                                                    <Tag.CheckableTag
+                                                        key={tag}
+                                                        checked={tag === ALL_PROMPTS_OPTION ? selectedTags.length === 0 : selectedTags.includes(tag)}
+                                                        className={cn("prompt-filter-tag", (tag === ALL_PROMPTS_OPTION ? selectedTags.length === 0 : selectedTags.includes(tag)) && "is-active")}
+                                                        onChange={() => toggleTag(tag)}
+                                                    >
+                                                        {tag}
+                                                    </Tag.CheckableTag>
+                                                ))}
+                                            </div>
+                                        </div>
+                                    ) : null}
                                 </div>
-                                <div className="grid gap-2 sm:grid-cols-[56px_minmax(0,1fr)] sm:items-start">
-                                    <div className="pt-2 text-xs font-medium text-stone-500 dark:text-stone-400">标签</div>
-                                    <div className="flex flex-wrap gap-2">
-                                        {promptTags.map((tag) => (
-                                            <Tag.CheckableTag
-                                                key={tag}
-                                                checked={tag === ALL_PROMPTS_OPTION ? selectedTags.length === 0 : selectedTags.includes(tag)}
-                                                className={cn("prompt-filter-tag", (tag === ALL_PROMPTS_OPTION ? selectedTags.length === 0 : selectedTags.includes(tag)) && "is-active")}
-                                                onChange={() => toggleTag(tag)}
-                                            >
-                                                {tag}
-                                            </Tag.CheckableTag>
-                                        ))}
-                                    </div>
-                                </div>
-                            </div>
+                            ) : null}
                         </>
                     ) : null}
                 </div>

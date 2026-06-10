@@ -16,6 +16,8 @@ export type UploadedImage = {
 
 const store = localforage.createInstance({ name: "infinite-canvas", storeName: "image_files" });
 const objectUrls = new Map<string, string>();
+const REMOTE_IMAGE_FETCH_RETRIES = 5;
+const REMOTE_IMAGE_FETCH_RETRY_DELAY_MS = 1800;
 
 export async function uploadImage(input: string | Blob): Promise<UploadedImage> {
     const blob = typeof input === "string" ? await fetchImageBlob(input) : input;
@@ -92,9 +94,24 @@ function blobToDataUrl(blob: Blob) {
 }
 
 async function fetchImageBlob(url: string) {
-    const response = await fetch(proxiedImageUrl(url));
-    if (!response.ok) throw new Error(`图片读取失败：${response.status}`);
-    return response.blob();
+    const src = proxiedImageUrl(url);
+    const retries = shouldRetryImageFetch(url, src) ? REMOTE_IMAGE_FETCH_RETRIES : 1;
+    let lastError: unknown;
+    for (let attempt = 1; attempt <= retries; attempt += 1) {
+        try {
+            const response = await fetch(src, { cache: "no-store" });
+            if (!response.ok) throw new Error(`图片读取失败：${response.status}`);
+            const blob = await response.blob();
+            if (!blob.size) throw new Error("图片读取失败：空文件");
+            return blob;
+        } catch (error) {
+            lastError = error;
+            if (attempt === retries) break;
+            await delay(REMOTE_IMAGE_FETCH_RETRY_DELAY_MS * attempt);
+        }
+    }
+    const reason = lastError instanceof Error ? lastError.message : "图片读取失败";
+    throw new Error(isRemoteHttpUrl(url) ? `图片生成已完成，但读取结果图片失败：${reason}` : reason);
 }
 
 function proxiedImageUrl(url: string) {
@@ -108,4 +125,21 @@ function proxiedImageUrl(url: string) {
     } catch {
         return url;
     }
+}
+
+function shouldRetryImageFetch(originalUrl: string, fetchUrl: string) {
+    return isRemoteHttpUrl(originalUrl) || fetchUrl.startsWith("/image-proxy?");
+}
+
+function isRemoteHttpUrl(url: string) {
+    try {
+        const parsed = new URL(url, typeof window === "undefined" ? "http://localhost" : window.location.href);
+        return (parsed.protocol === "http:" || parsed.protocol === "https:") && (typeof window === "undefined" || parsed.origin !== window.location.origin);
+    } catch {
+        return false;
+    }
+}
+
+function delay(ms: number) {
+    return new Promise((resolve) => setTimeout(resolve, ms));
 }

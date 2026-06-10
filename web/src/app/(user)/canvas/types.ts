@@ -88,6 +88,13 @@ export type CanvasAssistantImage = {
     dataUrl: string;
     storageKey?: string;
     prompt: string;
+    insertedNodeId?: string;
+};
+
+export type CanvasAssistantImageSlot = {
+    id: string;
+    prompt: string;
+    title?: string;
 };
 
 export type CanvasAssistantMessage = {
@@ -100,9 +107,20 @@ export type CanvasAssistantMessage = {
     images?: CanvasAssistantImage[];
 };
 
+export type CanvasAssistantMemory = {
+    summary: string;
+    preferences: string[];
+    facts: string[];
+    openQuestions: string[];
+    updatedAt: string;
+    turns: number;
+};
+
 export type CanvasAssistantSession = {
     id: string;
     title: string;
+    memory?: CanvasAssistantMemory | string;
+    archivedAt?: string;
     messages: CanvasAssistantMessage[];
     createdAt: string;
     updatedAt: string;

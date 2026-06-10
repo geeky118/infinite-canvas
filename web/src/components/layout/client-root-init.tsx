@@ -23,6 +23,17 @@ type CloudAssetsPayload = {
     assets: Asset[];
 };
 
+type CloudSaveTask = {
+    timer: ReturnType<typeof setTimeout> | null;
+    inFlight: boolean;
+    pending: boolean;
+    lastPayload: string;
+};
+
+const CLOUD_CANVAS_SAVE_DELAY_MS = 6000;
+const CLOUD_CONFIG_SAVE_DELAY_MS = 1500;
+const CLOUD_ASSETS_SAVE_DELAY_MS = 3000;
+
 export function ClientRootInit({ children }: { children: ReactNode }) {
     const { message } = App.useApp();
     const handledConfigParams = useRef(false);
@@ -89,37 +100,28 @@ export function ClientRootInit({ children }: { children: ReactNode }) {
 
     useEffect(() => {
         if (!token || !userId) return;
-        let canvasTimer: ReturnType<typeof setTimeout> | null = null;
-        let configTimer: ReturnType<typeof setTimeout> | null = null;
-        let assetsTimer: ReturnType<typeof setTimeout> | null = null;
+        const canvasTask = createCloudSaveTask();
+        const configTask = createCloudSaveTask();
+        const assetsTask = createCloudSaveTask();
         const unsubscribeCanvas = useCanvasStore.subscribe((state, previous) => {
             if (!cloudSyncReady.current.canvas || state.projects === previous.projects) return;
-            if (canvasTimer) clearTimeout(canvasTimer);
-            canvasTimer = setTimeout(() => {
-                void saveUserData(token, "canvas", { projects: useCanvasStore.getState().projects });
-            }, 800);
+            scheduleCloudSave(canvasTask, CLOUD_CANVAS_SAVE_DELAY_MS, () => ({ projects: useCanvasStore.getState().projects }), (payload) => saveUserData(token, "canvas", payload));
         });
         const unsubscribeConfig = useConfigStore.subscribe((state, previous) => {
             if (!cloudSyncReady.current.config || state.config === previous.config) return;
-            if (configTimer) clearTimeout(configTimer);
-            configTimer = setTimeout(() => {
-                void saveUserData(token, "ai-config", { config: useConfigStore.getState().config });
-            }, 800);
+            scheduleCloudSave(configTask, CLOUD_CONFIG_SAVE_DELAY_MS, () => ({ config: useConfigStore.getState().config }), (payload) => saveUserData(token, "ai-config", payload));
         });
         const unsubscribeAssets = useAssetStore.subscribe((state, previous) => {
             if (!cloudSyncReady.current.assets || state.assets === previous.assets) return;
-            if (assetsTimer) clearTimeout(assetsTimer);
-            assetsTimer = setTimeout(() => {
-                void saveUserData(token, "assets", { assets: useAssetStore.getState().assets });
-            }, 800);
+            scheduleCloudSave(assetsTask, CLOUD_ASSETS_SAVE_DELAY_MS, () => ({ assets: useAssetStore.getState().assets }), (payload) => saveUserData(token, "assets", payload));
         });
         return () => {
             unsubscribeCanvas();
             unsubscribeConfig();
             unsubscribeAssets();
-            if (canvasTimer) clearTimeout(canvasTimer);
-            if (configTimer) clearTimeout(configTimer);
-            if (assetsTimer) clearTimeout(assetsTimer);
+            clearCloudSaveTask(canvasTask);
+            clearCloudSaveTask(configTask);
+            clearCloudSaveTask(assetsTask);
         };
     }, [token, userId]);
 
@@ -161,4 +163,41 @@ export function ClientRootInit({ children }: { children: ReactNode }) {
     }, [config, message, openConfigDialog, publicSettings, updateConfig]);
 
     return <>{children}</>;
+}
+
+function createCloudSaveTask(): CloudSaveTask {
+    return { timer: null, inFlight: false, pending: false, lastPayload: "" };
+}
+
+function clearCloudSaveTask(task: CloudSaveTask) {
+    if (task.timer) clearTimeout(task.timer);
+    task.timer = null;
+    task.pending = false;
+}
+
+function scheduleCloudSave<T>(task: CloudSaveTask, delay: number, readPayload: () => T, save: (payload: T) => Promise<unknown>) {
+    task.pending = true;
+    if (task.timer) clearTimeout(task.timer);
+    task.timer = setTimeout(() => {
+        task.timer = null;
+        void flushCloudSave(task, delay, readPayload, save);
+    }, delay);
+}
+
+async function flushCloudSave<T>(task: CloudSaveTask, delay: number, readPayload: () => T, save: (payload: T) => Promise<unknown>) {
+    if (task.inFlight) return;
+    task.pending = false;
+    const payload = readPayload();
+    const serialized = JSON.stringify(payload);
+    if (serialized === task.lastPayload) return;
+    task.inFlight = true;
+    try {
+        await save(payload);
+        task.lastPayload = serialized;
+    } catch {
+        task.pending = true;
+    } finally {
+        task.inFlight = false;
+    }
+    if (task.pending) scheduleCloudSave(task, delay, readPayload, save);
 }
