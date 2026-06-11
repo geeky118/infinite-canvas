@@ -326,7 +326,7 @@ export async function requestEdit(config: AiConfig, prompt: string, references: 
     if (requestSize) {
         formData.set("size", requestSize);
     }
-    const files = await Promise.all(references.map(async (image) => dataUrlToFile({ ...image, dataUrl: await imageToDataUrl(image) })));
+    const files = await Promise.all(references.map(async (image) => dataUrlToFile({ ...image, dataUrl: image.dataUrl?.startsWith("data:") ? image.dataUrl : await imageToDataUrl(image) })));
     files.forEach((file) => formData.append("image", file));
     if (mask) formData.set("mask", dataUrlToFile(mask));
 

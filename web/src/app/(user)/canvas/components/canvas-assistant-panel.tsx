@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Archive, ArchiveRestore, ArrowUp, History, ImageIcon, LoaderCircle, MessageSquare, PanelRightClose, Plus, RotateCcw, Settings2, Sparkles, Trash2, X } from "lucide-react";
+import { Archive, ArchiveRestore, ArrowUp, History, LoaderCircle, MessageSquare, PanelRightClose, Plus, RotateCcw, Settings2, Sparkles, Trash2, X } from "lucide-react";
 import { Button, Modal, Tooltip } from "antd";
 import { motion } from "motion/react";
 
@@ -13,17 +13,25 @@ import { canvasThemes } from "@/lib/canvas-theme";
 import { nanoid } from "nanoid";
 import { cn } from "@/lib/utils";
 import { requestEdit, requestGeneration, requestImageQuestion, type ChatCompletionMessage } from "@/services/api/image";
-import { imageToDataUrl, resolveImageUrl, uploadImage } from "@/services/image-storage";
+import { imageToDataUrl, isRemoteHttpImageUrl, resolveImageUrl, uploadImage } from "@/services/image-storage";
 import { useAssetStore } from "@/stores/use-asset-store";
 import { useThemeStore } from "@/stores/use-theme-store";
 import { imageReferenceLabel } from "@/lib/image-reference-prompt";
 import type { ReferenceImage } from "@/types/image";
 import { DiaTextReveal } from "@/components/ui/dia-text-reveal";
 import { CanvasImageSettingsPopover } from "./canvas-image-settings-popover";
-import { CanvasPromptLibrary } from "./canvas-prompt-library";
 import { CanvasNodeType, type CanvasAssistantImage, type CanvasAssistantImageSlot, type CanvasAssistantMemory, type CanvasAssistantMessage, type CanvasAssistantReference, type CanvasAssistantSession, type CanvasNodeData } from "../types";
+import { canvasTextSelectionStyle, copySelectedTextFromTextControl } from "../utils/canvas-text-clipboard";
 
 type AssistantMode = "ask" | "image";
+type AssistantIntentKind = "chat" | "image_analysis" | "image_generation" | "image_edit" | "image_split";
+type AssistantIntent = {
+    kind: AssistantIntentKind;
+    mode: AssistantMode;
+    useReferences: boolean;
+    confidence: number;
+    reason?: string;
+};
 const PANEL_MOTION_MS = 500;
 const PANEL_MOTION_SECONDS = PANEL_MOTION_MS / 1000;
 const CHAT_RECENT_MESSAGE_LIMIT = 12;
@@ -56,7 +64,6 @@ export function CanvasAssistantPanel({ nodes, selectedNodeIds, sessions, activeS
     const openConfigDialog = useConfigStore((state) => state.openConfigDialog);
     const [width, setWidth] = useState(340);
     const [view, setView] = useState<"chat" | "active" | "archived">("chat");
-    const [mode, setMode] = useState<AssistantMode>("ask");
     const [prompt, setPrompt] = useState("");
     const [isRunning, setIsRunning] = useState(false);
     const [checkedChatIds, setCheckedChatIds] = useState<string[]>([]);
@@ -183,12 +190,14 @@ export function CanvasAssistantPanel({ nodes, selectedNodeIds, sessions, activeS
     };
 
     const sendMessage = async (text: string, nextMode: AssistantMode, history: CanvasAssistantMessage[], savedReferences?: CanvasAssistantReference[]) => {
-        const selectedRefs = savedReferences || selectedReferences;
-        const routedMode = resolveAssistantMode(text, nextMode, selectedRefs);
-        const refs = filterReferencesForRequest(text, routedMode, selectedRefs);
-        const requestConfig = { ...effectiveConfig, count: routedMode === "image" ? effectiveConfig.canvasImageCount || effectiveConfig.count : effectiveConfig.count, model: routedMode === "image" ? effectiveConfig.imageModel || effectiveConfig.model : effectiveConfig.textModel || effectiveConfig.model };
-        if (!isAiConfigReady(requestConfig, requestConfig.model)) {
+        setIsRunning(true);
+        const selectedRefs = resolveAssistantMessageReferences(text, savedReferences ?? selectedReferences, history, nodes);
+        const initialMode = nextMode === "image" || shouldUseFastImageEditRoute(text, selectedRefs) ? "image" : "ask";
+        const initialRefs = initialMode === "image" ? selectedRefs : selectedRefs.filter((item) => !hasImageReference(item));
+        const initialConfig = { ...effectiveConfig, count: initialMode === "image" ? effectiveConfig.canvasImageCount || effectiveConfig.count : effectiveConfig.count, model: initialMode === "image" ? effectiveConfig.imageModel || effectiveConfig.model : effectiveConfig.textModel || effectiveConfig.model };
+        if (!isAiConfigReady(initialConfig, initialConfig.model)) {
             openConfigDialog(true);
+            setIsRunning(false);
             return;
         }
 
@@ -198,24 +207,45 @@ export function CanvasAssistantPanel({ nodes, selectedNodeIds, sessions, activeS
             setLocalActiveSessionId(session.id);
         }
 
-        const userMessage: CanvasAssistantMessage = { id: nanoid(), role: "user", mode: routedMode, text, references: refs };
+        const userMessage: CanvasAssistantMessage = { id: nanoid(), role: "user", mode: initialMode, text, references: initialRefs };
         const assistantId = nanoid();
         appendMessage(session.id, userMessage);
-        appendMessage(session.id, { id: assistantId, role: "assistant", mode: routedMode, text: isSplitImageTask(text, refs) ? "正在拆分图片任务" : routedMode === "image" ? "正在分析图片任务" : "正在回答", isLoading: true });
+        appendMessage(session.id, { id: assistantId, role: "assistant", mode: initialMode, text: initialMode === "image" ? "正在理解图片任务" : "正在回答", isLoading: true });
         setPrompt("");
-        setIsRunning(true);
 
         try {
+            const routerConfig = { ...effectiveConfig, count: "1", model: effectiveConfig.textModel || effectiveConfig.model, systemPrompt: "" };
+            let intent = shouldUseFastImageEditRoute(text, selectedRefs)
+                ? ({ kind: "image_edit", mode: "image", useReferences: true, confidence: 0.82, reason: "本地规则识别为参考图编辑" } satisfies AssistantIntent)
+                : await resolveAssistantIntent(text, nextMode, selectedRefs, history, routerConfig, isAiConfigReady(routerConfig, routerConfig.model));
+            if (shouldForceReferenceImageEdit(text, selectedRefs, intent)) {
+                intent = { ...intent, kind: "image_edit", mode: "image", useReferences: true, confidence: Math.max(intent.confidence, 0.78), reason: "当前输入是基于最近参考图的视觉调整" };
+            }
+            const routedMode = intent.kind === "image_analysis" ? "ask" : intent.mode;
+            const refs = filterReferencesForIntent(text, intent, selectedRefs);
+            const routedUserMessage: CanvasAssistantMessage = { ...userMessage, mode: routedMode, references: refs };
+            const requestConfig = { ...effectiveConfig, count: routedMode === "image" ? effectiveConfig.canvasImageCount || effectiveConfig.count : effectiveConfig.count, model: routedMode === "image" ? effectiveConfig.imageModel || effectiveConfig.model : effectiveConfig.textModel || effectiveConfig.model };
+            if (!isAiConfigReady(requestConfig, requestConfig.model)) {
+                openConfigDialog(true);
+                updateMessage(session.id, assistantId, { text: "当前模型配置不可用，请先完成配置。", isLoading: false });
+                return;
+            }
+            updateMessage(session.id, userMessage.id, { mode: routedUserMessage.mode, references: routedUserMessage.references });
+            updateMessage(session.id, assistantId, { mode: routedMode, text: intent.kind === "image_split" ? "正在拆分图片任务" : intent.kind === "image_analysis" ? "正在分析图片" : routedMode === "image" ? "正在准备图片任务" : "正在回答", isLoading: true });
+
             if (routedMode === "image") {
+                updateMessage(session.id, assistantId, { text: refs.some(hasImageReference) ? "正在读取参考图" : "正在准备图片任务", isLoading: true });
                 const referenceImages: ReferenceImage[] = await Promise.all(
-                    refs.filter((item) => item.dataUrl).map(async (item) => ({ id: item.id, name: `${item.title}.png`, type: "image/png", dataUrl: await imageToDataUrl(item), storageKey: item.storageKey })),
+                    refs.filter(hasImageReference).map(async (item) => ({ id: item.id, name: `${item.title}.png`, type: "image/png", dataUrl: await imageToDataUrl(item), storageKey: item.storageKey, remoteUrl: item.remoteUrl })),
                 );
-                const imagePrompt = resolveImagePrompt(text, history);
+                const imagePrompt = resolveImagePrompt(text, history, refs);
                 if (!imagePrompt) {
                     updateMessage(session.id, assistantId, { text: "没有找到上一条可用的提示词，请先生成或输入具体提示词。", isLoading: false });
                     return;
                 }
-                const plan = await buildImageTaskPlan(requestConfig, imagePrompt, text, refs, referenceImages);
+                const plan = shouldUseFastSingleImageEdit(text, refs)
+                    ? fallbackImageTaskPlan(imagePrompt, text, refs)
+                    : await buildImageTaskPlan(requestConfig, imagePrompt, text, refs, referenceImages);
                 const isMultiTask = plan.strategy === "multi" || plan.tasks.length > 1;
                 if (isMultiTask) {
                     updateMessage(session.id, assistantId, { text: `已识别为“${plan.intent}”，拆分为 ${plan.tasks.length} 个执行任务，正在并行生成`, isLoading: true });
@@ -283,14 +313,14 @@ export function CanvasAssistantPanel({ nodes, selectedNodeIds, sessions, activeS
                 return;
             }
 
-            const answer = await requestImageQuestion(requestConfig, await buildChatMessages([...history.slice(-CHAT_RECENT_MESSAGE_LIMIT), userMessage], session.memory), (streamed) => {
+            const answer = await requestImageQuestion(requestConfig, await buildChatMessages([...history.slice(-CHAT_RECENT_MESSAGE_LIMIT), routedUserMessage], session.memory), (streamed) => {
                 updateMessage(session.id, assistantId, { text: streamed, isLoading: false });
             });
             updateMessage(session.id, assistantId, { text: answer, isLoading: false });
-            if (shouldRememberTurn(userMessage, answer)) {
-                updateSession(session.id, (current) => ({ ...current, memory: buildFallbackMemory(current.memory, userMessage, answer), updatedAt: new Date().toISOString() }));
-                if (shouldCompressMemory(session.memory, userMessage)) {
-                    void updateSessionMemory(session.id, requestConfig, session.memory, [...history.slice(-CHAT_RECENT_MESSAGE_LIMIT), userMessage], answer);
+            if (shouldRememberTurn(routedUserMessage, answer)) {
+                updateSession(session.id, (current) => ({ ...current, memory: buildFallbackMemory(current.memory, routedUserMessage, answer), updatedAt: new Date().toISOString() }));
+                if (shouldCompressMemory(session.memory, routedUserMessage)) {
+                    void updateSessionMemory(session.id, requestConfig, session.memory, [...history.slice(-CHAT_RECENT_MESSAGE_LIMIT), routedUserMessage], answer);
                 }
             }
         } catch (error) {
@@ -315,7 +345,7 @@ export function CanvasAssistantPanel({ nodes, selectedNodeIds, sessions, activeS
         const storedResults = await Promise.allSettled(
             generatedImages.map(async (image) => {
                 const stored = await uploadImage(image.dataUrl);
-                return { ...image, dataUrl: stored.url, storageKey: stored.storageKey };
+                return { ...image, dataUrl: stored.url, storageKey: stored.storageKey || undefined, remoteUrl: stored.remoteUrl };
             }),
         );
         const assistantImages: CanvasAssistantImage[] = storedResults.map((result, index) =>
@@ -324,6 +354,7 @@ export function CanvasAssistantPanel({ nodes, selectedNodeIds, sessions, activeS
                 : {
                       id: generatedImages[index].id,
                       dataUrl: generatedImages[index].dataUrl,
+                      remoteUrl: isRemoteHttpImageUrl(generatedImages[index].dataUrl) ? generatedImages[index].dataUrl : undefined,
                       prompt: generatedImages[index].prompt,
                   },
         );
@@ -354,14 +385,14 @@ export function CanvasAssistantPanel({ nodes, selectedNodeIds, sessions, activeS
     const submit = async () => {
         const text = prompt.trim();
         if (!text || isRunning) return;
-        await sendMessage(text, mode, messages);
+        await sendMessage(text, "ask", messages);
     };
 
     const retryMessage = (message: CanvasAssistantMessage) => {
         const index = messages.findIndex((item) => item.id === message.id);
         const userIndex = messages.slice(0, index).findLastIndex((item) => item.role === "user");
         const user = messages[userIndex];
-        if (user) void sendMessage(user.text, user.mode, messages.slice(0, userIndex), user.references);
+        if (user) void sendMessage(user.text, "ask", messages.slice(0, userIndex), user.references);
     };
 
     const updateSessionMemory = async (sessionId: string, config: AiConfig, memory: CanvasAssistantMemory | string | undefined, recentMessages: CanvasAssistantMessage[], answer: string) => {
@@ -521,12 +552,10 @@ export function CanvasAssistantPanel({ nodes, selectedNodeIds, sessions, activeS
 
                 {view === "chat" ? (
                     <AssistantComposer
-                        mode={mode}
                         prompt={prompt}
                         isRunning={isRunning}
                         references={selectedReferences}
                         config={assistantConfig}
-                        onModeChange={setMode}
                         onPromptChange={setPrompt}
                         onSubmit={submit}
                         onConfigChange={(key, value) => updateConfig(key === "count" ? "canvasImageCount" : key, value)}
@@ -569,12 +598,10 @@ export function CanvasAssistantPanel({ nodes, selectedNodeIds, sessions, activeS
 }
 
 function AssistantComposer({
-    mode,
     prompt,
     isRunning,
     references,
     config,
-    onModeChange,
     onPromptChange,
     onSubmit,
     onConfigChange,
@@ -583,12 +610,10 @@ function AssistantComposer({
     onPasteImage,
     modelCosts,
 }: {
-    mode: AssistantMode;
     prompt: string;
     isRunning: boolean;
     references: CanvasAssistantReference[];
     config: AiConfig;
-    onModeChange: (mode: AssistantMode) => void;
     onPromptChange: (prompt: string) => void;
     onSubmit: () => void;
     onConfigChange: (key: keyof AiConfig, value: string) => void;
@@ -598,8 +623,7 @@ function AssistantComposer({
     modelCosts?: { model: string; credits: number }[];
 }) {
     const theme = canvasThemes[useThemeStore((state) => state.theme)];
-    const activeModel = mode === "image" ? config.imageModel || config.model : config.textModel || config.model;
-    const credits = requestCreditCost({ channelMode: config.channelMode, modelCosts, model: activeModel, count: mode === "image" ? config.count : 1 });
+    const credits = requestCreditCost({ channelMode: config.channelMode, modelCosts, model: config.imageModel || config.model, count: config.count });
 
     return (
         <div className="px-2 pb-2" onWheelCapture={(event) => event.stopPropagation()}>
@@ -614,6 +638,7 @@ function AssistantComposer({
                 <textarea
                     value={prompt}
                     onChange={(event) => onPromptChange(event.target.value)}
+                    onCopy={copySelectedTextFromTextControl}
                     onPaste={(event) => {
                         const file = Array.from(event.clipboardData.files).find((item) => item.type.startsWith("image/"));
                         if (!file) return;
@@ -625,22 +650,14 @@ function AssistantComposer({
                         event.preventDefault();
                         void onSubmit();
                     }}
-                    className="thin-scrollbar h-20 w-full resize-none border-0 bg-transparent px-1 py-1 text-sm leading-5 outline-none placeholder:text-stone-400"
-                    style={{ color: theme.node.text }}
-                    placeholder={mode === "image" ? "描述你想生成或修改的图片" : "输入你想问的问题"}
+                    className="thin-scrollbar h-20 w-full resize-none border-0 bg-transparent px-1 py-1 text-sm leading-5 outline-none select-text placeholder:text-stone-400"
+                    style={{ color: theme.node.text, caretColor: theme.node.activeStroke, ...canvasTextSelectionStyle }}
+                    placeholder="输入问题、图片生成或修改要求"
                 />
                 <div className="mt-2 flex items-center justify-between gap-2">
                     <div className="canvas-composer-tools flex min-w-0 flex-1 items-center gap-1">
-                        <CanvasPromptLibrary onSelect={onPromptChange} />
-                        <AssistantModeSwitch mode={mode} theme={theme} onChange={onModeChange} />
-                        {mode === "image" ? (
-                            <>
-                                <ModelPicker className="h-8 shrink-0" config={config} value={config.imageModel || config.model} onChange={(model) => onConfigChange("imageModel", model)} capability="image" onMissingConfig={onMissingConfig} />
-                                <CanvasImageSettingsPopover config={config} placement="topRight" getPopupContainer={() => document.body} buttonClassName="canvas-composer-settings canvas-composer-icon !h-8 !min-w-8 !rounded-full !px-2" onConfigChange={onConfigChange} onMissingConfig={onMissingConfig} />
-                            </>
-                        ) : (
-                            <ModelPicker className="h-8 shrink-0" config={config} value={config.textModel || config.model} onChange={(model) => onConfigChange("textModel", model)} capability="text" onMissingConfig={onMissingConfig} />
-                        )}
+                        <ModelPicker iconOnly className="canvas-composer-icon-only" config={config} value={config.imageModel || config.model} onChange={(model) => onConfigChange("imageModel", model)} capability="image" placeholder="图片模型" onMissingConfig={onMissingConfig} />
+                        <CanvasImageSettingsPopover config={config} placement="topRight" getPopupContainer={() => document.body} buttonClassName="canvas-composer-settings canvas-composer-icon canvas-composer-icon-only !h-8 !w-8 !min-w-8 !rounded-full !px-0" onConfigChange={onConfigChange} onMissingConfig={onMissingConfig} />
                     </div>
                     <Button
                         type="primary"
@@ -659,30 +676,6 @@ function AssistantComposer({
                     </Button>
                 </div>
             </div>
-        </div>
-    );
-}
-
-function AssistantModeSwitch({ mode, theme, onChange }: { mode: AssistantMode; theme: (typeof canvasThemes)[keyof typeof canvasThemes]; onChange: (mode: AssistantMode) => void }) {
-    return (
-        <div className="canvas-composer-mode-switch flex h-8 shrink-0 items-center rounded-full p-0.5" style={{ background: theme.node.fill }}>
-            {[
-                { value: "ask" as const, title: "对话", icon: <MessageSquare className="size-4" /> },
-                { value: "image" as const, title: "生图", icon: <ImageIcon className="size-4" /> },
-            ].map((item) => (
-                <Tooltip key={item.value} title={item.title}>
-                    <button
-                        type="button"
-                        className="canvas-composer-mode-button flex h-7 cursor-pointer items-center justify-center gap-1 rounded-full border-0 bg-transparent transition"
-                        style={{ background: mode === item.value ? theme.node.activeStroke : "transparent", color: mode === item.value ? theme.node.panel : theme.node.text }}
-                        onClick={() => onChange(item.value)}
-                        aria-label={item.title}
-                    >
-                        {item.icon}
-                        <span>{item.title}</span>
-                    </button>
-                </Tooltip>
-            ))}
         </div>
     );
 }
@@ -817,7 +810,7 @@ function AssistantReferenceChip({ item, label, onRemove }: { item: CanvasAssista
     const text = (item.text || item.title).replace(/\s+/g, " ").trim().slice(0, 1) || "文";
     return (
         <div className="group/chip relative inline-flex h-8 max-w-[150px] shrink-0 items-center gap-1.5 rounded-lg text-sm" style={{ color: theme.node.text }}>
-            {item.dataUrl || item.storageKey ? (
+            {hasImageReference(item) ? (
                 <span className="relative block size-8 shrink-0">
                     <AssistantImagePreview image={item} className="size-8 rounded-lg object-cover" />
                     {label ? <span className="absolute left-0.5 top-0.5 rounded bg-black/60 px-1 py-0.5 text-[8px] font-medium leading-none text-white">{label}</span> : null}
@@ -842,33 +835,37 @@ function AssistantReferenceChip({ item, label, onRemove }: { item: CanvasAssista
     );
 }
 
-function AssistantImagePreview({ image, className }: { image: { dataUrl?: string; storageKey?: string }; className?: string }) {
-    const [src, setSrc] = useState(image.dataUrl || "");
+function AssistantImagePreview({ image, className }: { image: { dataUrl?: string; storageKey?: string; remoteUrl?: string }; className?: string }) {
+    const [src, setSrc] = useState(image.dataUrl || image.remoteUrl || "");
     useEffect(() => {
         let cancelled = false;
         if (!image.storageKey) {
-            setSrc(image.dataUrl || "");
+            setSrc(image.dataUrl || image.remoteUrl || "");
             return;
         }
-        void resolveImageUrl(image.storageKey, image.dataUrl || "").then((url) => {
+        void resolveImageUrl(image.storageKey, image.dataUrl || "", image.remoteUrl || "").then((url) => {
             if (!cancelled) setSrc(url);
         });
         return () => {
             cancelled = true;
         };
-    }, [image.dataUrl, image.storageKey]);
+    }, [image.dataUrl, image.remoteUrl, image.storageKey]);
     return src ? <img src={src} alt="" className={className} loading="lazy" /> : <div className={cn("animate-pulse bg-black/10 dark:bg-white/10", className)} />;
 }
 
 function assistantImageReferenceLabel(references: CanvasAssistantReference[], index: number) {
-    if (!references[index]?.dataUrl) return undefined;
-    const imageIndex = references.slice(0, index + 1).filter((item) => item.dataUrl).length - 1;
+    if (!hasImageReference(references[index])) return undefined;
+    const imageIndex = references.slice(0, index + 1).filter(hasImageReference).length - 1;
     return imageIndex >= 0 ? imageReferenceLabel(imageIndex) : undefined;
+}
+
+function hasImageReference(item?: Pick<CanvasAssistantReference, "dataUrl" | "storageKey" | "remoteUrl">) {
+    return Boolean(item?.dataUrl || item?.storageKey || item?.remoteUrl);
 }
 
 function nodeToReference(node: CanvasNodeData): CanvasAssistantReference | null {
     if (node.type === CanvasNodeType.Image && node.metadata?.content) {
-        return { id: node.id, type: node.type, title: node.title, dataUrl: node.metadata.content, storageKey: node.metadata.storageKey };
+        return { id: node.id, type: node.type, title: node.title, dataUrl: node.metadata.content, storageKey: node.metadata.storageKey, remoteUrl: node.metadata.remoteUrl };
     }
     if (node.type === CanvasNodeType.Text && node.metadata?.content) {
         return { id: node.id, type: node.type, title: node.title, text: node.metadata.content };
@@ -885,27 +882,185 @@ function buildAssistantReferences(nodes: CanvasNodeData[], selectedNodeIds: Set<
         .filter((item): item is CanvasAssistantReference => Boolean(item));
 }
 
-function resolveAssistantMode(text: string, mode: AssistantMode, references: CanvasAssistantReference[]): AssistantMode {
-    if (mode === "image") return "image";
-    return wantsImageOutput(text) || wantsImageEdit(text, references) || isSplitImageTask(text, references) ? "image" : "ask";
+function resolveAssistantMessageReferences(text: string, references: CanvasAssistantReference[], history: CanvasAssistantMessage[], nodes: CanvasNodeData[]) {
+    if (references.some(hasImageReference)) return references;
+    if (!shouldCarryRecentImageReference(text)) return references;
+    const recentReference = findRecentAssistantImageReference(history, nodes);
+    return recentReference ? [recentReference, ...references.filter((item) => item.type !== CanvasNodeType.Image)] : references;
 }
 
-function filterReferencesForRequest(text: string, mode: AssistantMode, references: CanvasAssistantReference[]) {
-    if (mode !== "image" || shouldUseImageReferences(text, references)) return references;
-    return references.filter((item) => !item.dataUrl);
+function findRecentAssistantImageReference(history: CanvasAssistantMessage[], nodes: CanvasNodeData[]) {
+    const nodeById = new Map(nodes.map((node) => [node.id, node]));
+    for (let index = history.length - 1; index >= 0; index -= 1) {
+        const message = history[index];
+        if (message.role !== "assistant" || message.isLoading || !message.images?.length) continue;
+        for (let imageIndex = message.images.length - 1; imageIndex >= 0; imageIndex -= 1) {
+            const image = message.images[imageIndex];
+            const insertedNode = image.insertedNodeId ? nodeById.get(image.insertedNodeId) : undefined;
+            const nodeReference = insertedNode ? nodeToReference(insertedNode) : null;
+            if (nodeReference && hasImageReference(nodeReference)) return nodeReference;
+            if (image.dataUrl || image.storageKey || image.remoteUrl) {
+                return {
+                    id: image.insertedNodeId || image.id,
+                    type: CanvasNodeType.Image,
+                    title: image.prompt?.slice(0, 32) || "上一张生成图",
+                    dataUrl: image.dataUrl,
+                    storageKey: image.storageKey,
+                    remoteUrl: image.remoteUrl,
+                };
+            }
+        }
+    }
+    return null;
+}
+
+function shouldCarryRecentImageReference(text: string) {
+    const compactText = text.replace(/\s+/g, "");
+    if (!compactText) return false;
+    if (usesPreviousPrompt(compactText)) return false;
+    return IMAGE_REFERENCE_POINTER_PATTERN.test(compactText) || IMAGE_EDIT_DIRECTIVE_PATTERN.test(compactText) || /(拉近|拉远|推近|推远|靠近|远一些|近一些|近一点|远一点|大一些|小一些|自然一些|更自然)/i.test(compactText);
+}
+
+function shouldForceReferenceImageEdit(text: string, references: CanvasAssistantReference[], intent: AssistantIntent) {
+    if (!references.some(hasImageReference) || intent.kind === "image_analysis" || intent.kind === "image_split") return false;
+    return hasImageEditIntent(text, references) || shouldCarryRecentImageReference(text);
+}
+
+function shouldUseFastImageEditRoute(text: string, references: CanvasAssistantReference[]) {
+    return references.some(hasImageReference) && shouldUseFastSingleImageEdit(text, references);
+}
+
+function shouldUseFastSingleImageEdit(text: string, references: CanvasAssistantReference[]) {
+    if (references.filter(hasImageReference).length !== 1) return false;
+    if (IMAGE_ANALYSIS_ONLY_PATTERN.test(text.replace(/\s+/g, ""))) return false;
+    if (isReferenceCompositionTask(text, references) || isPerReferenceImageTask(text, references) || isReferenceElementSplitTask(text, references) || wantsMultipleIndependentImages(text) || extractUiPageTasks(text).length > 1) return false;
+    return hasImageEditIntent(text, references) || shouldCarryRecentImageReference(text);
+}
+
+const IMAGE_REFERENCE_POINTER_PATTERN = /(这张|这幅|这图|这个图|这张图|这几张|这些图|当前图|选中|参考图|参考图片|原图|图片\s*\d+|它|其)/i;
+const IMAGE_EDIT_DIRECTIVE_PATTERN = /(改为|改成|修改|修图|编辑|重绘|重做|替换|换成|换为|换一个|调整|优化|变成|变为|去掉|删除|移除|增加|添加|补上|保留|保持|缩短|拉长|放大|缩小|扩图|裁剪|全身|半身|近景|远景|俯视|仰视|侧面|正面|背面|姿势|动作|表情|服装|衣服|裙摆|发型|背景|光线|色调|构图|比例|角度|景别|镜头|透视|edit|modify|change|replace|adjust|remove|add|pose|view|angle|full.?body|half.?body|top.?down|bird.?eye|outpaint|crop)/i;
+const IMAGE_EDIT_IMPERATIVE_PATTERN = /(帮我|请|麻烦|把|将|让|给我|直接|重新|再).{0,18}(改|换|调|变|删|去|加|扩|裁|做|生成|出图)|(?:改|换|调|变|删|去|加|扩|裁|做成|生成|出图).{0,18}(一下|一点|一些|成|为|到|图|图片|效果)/i;
+const IMAGE_ANALYSIS_ONLY_PATTERN = /(怎么|如何|为什么|能不能|可以吗|建议|评价|分析|看看|看一下|描述|说明|是什么|哪里|哪里不对|是否).{0,18}(吗|呢|？|\?|建议|问题|风格|特点|原因)?$/i;
+
+async function resolveAssistantIntent(text: string, mode: AssistantMode, references: CanvasAssistantReference[], history: CanvasAssistantMessage[], config: AiConfig, canUseModelRouter: boolean): Promise<AssistantIntent> {
+    const fallback = fallbackAssistantIntent(text, mode, references);
+    if (!canUseModelRouter) return fallback;
+    try {
+        const response = await requestImageQuestion(config, [{ role: "user", content: buildAssistantIntentPrompt(text, references, history) }], () => undefined);
+        return normalizeAssistantIntent(response, fallback, references);
+    } catch {
+        return fallback;
+    }
+}
+
+function fallbackAssistantIntent(text: string, mode: AssistantMode, references: CanvasAssistantReference[]): AssistantIntent {
+    const routedMode = resolveFallbackAssistantMode(text, mode, references);
+    const kind: AssistantIntentKind =
+        routedMode === "ask" ? "chat" : isSplitImageTask(text, references) ? "image_split" : hasImageEditIntent(text, references) || wantsImageEdit(text, references) ? "image_edit" : references.some(hasImageReference) && /(分析|总结|提炼|归纳|风格|规范|设计系统|design system)/i.test(text) ? "image_analysis" : "image_generation";
+    return { kind, mode: routedMode, useReferences: shouldUseImageReferences(text, references), confidence: 0.45, reason: "fallback" };
+}
+
+function resolveFallbackAssistantMode(text: string, mode: AssistantMode, references: CanvasAssistantReference[]): AssistantMode {
+    if (mode === "image") return "image";
+    return wantsImageOutput(text) || hasImageEditIntent(text, references) || wantsImageEdit(text, references) || wantsImageFromPreviousPrompt(text) || isSplitImageTask(text, references) ? "image" : "ask";
+}
+
+function filterReferencesForIntent(text: string, intent: AssistantIntent, references: CanvasAssistantReference[]) {
+    if (intent.useReferences || intent.kind === "image_edit" || intent.kind === "image_split" || intent.kind === "image_analysis") return references;
+    if (intent.mode !== "image" || shouldUseImageReferences(text, references)) return references;
+    return references.filter((item) => !hasImageReference(item));
+}
+
+function buildAssistantIntentPrompt(text: string, references: CanvasAssistantReference[], history: CanvasAssistantMessage[]) {
+    const recentMessages = history.slice(-6).map((message) => ({
+        role: message.role,
+        mode: message.mode,
+        text: message.text.slice(0, 300),
+        references: message.references?.map((item) => ({ title: item.title, type: item.type, hasImage: hasImageReference(item) })) || [],
+        hasImages: Boolean(message.images?.length),
+    }));
+    const referenceSummary = references.map((item, index) => ({
+        id: item.id,
+        index: index + 1,
+        title: item.title,
+        type: item.type,
+        hasImage: hasImageReference(item),
+        hasText: Boolean(item.text),
+    }));
+    return [
+        "你是画布助手的意图路由器。请根据用户当前输入、最近对话和选中的画布引用，判断下一步应该走哪条执行链路。",
+        "只输出纯 JSON，不要 Markdown，不要解释。",
+        "kind 只能是 chat、image_analysis、image_generation、image_edit、image_split。",
+        "chat：普通问答、解释、建议、只要文字回答。",
+        "image_analysis：用户想分析/描述/评价参考图，但没有要求生成或修改图片。",
+        "image_generation：用户要从文本生成新图片，或者用上一条提示词生图。",
+        "image_edit：用户要基于参考图直接改图、修图、换姿势、换角度、扩图、裁剪、换背景、换服装、调整构图或保持主体后改变画面。",
+        "image_split：用户要拆分多个元素、多张独立图、多姿势、多页面、多参考图逐张处理。",
+        "带参考图时，不要只看关键词，要理解用户是否在要求改变视觉结果；如果是，优先 image_edit 或 image_split。",
+        "useReferences 表示本轮执行是否应该携带选中的参考图。图片编辑、图片分析、拆分参考图时必须为 true；纯文本闲聊一般为 false。",
+        "confidence 是 0 到 1 的数字。reason 用一句短中文说明。",
+        "JSON 格式：{\"kind\":\"image_edit\",\"useReferences\":true,\"confidence\":0.92,\"reason\":\"用户要求基于选中图换姿势并改为全身\"}",
+        `当前用户输入：${text}`,
+        `选中引用：${JSON.stringify(referenceSummary)}`,
+        `最近对话：${JSON.stringify(recentMessages)}`,
+    ].join("\n\n");
+}
+
+function normalizeAssistantIntent(response: string, fallback: AssistantIntent, references: CanvasAssistantReference[]): AssistantIntent {
+    try {
+        const cleaned = response
+            .trim()
+            .replace(/^```(?:json)?/i, "")
+            .replace(/```$/i, "")
+            .trim();
+        const parsed = JSON.parse(cleaned) as { kind?: unknown; mode?: unknown; useReferences?: unknown; confidence?: unknown; reason?: unknown };
+        const kind = normalizeIntentKind(parsed.kind);
+        if (!kind) return fallback;
+        const mode: AssistantMode = kind === "chat" || kind === "image_analysis" ? "ask" : "image";
+        const confidence = Math.max(0, Math.min(1, Number(parsed.confidence) || fallback.confidence));
+        const useReferences = typeof parsed.useReferences === "boolean" ? parsed.useReferences : kind === "image_edit" || kind === "image_split" || kind === "image_analysis" || fallback.useReferences;
+        if ((kind === "image_edit" || kind === "image_split") && !references.some(hasImageReference)) return { ...fallback, reason: "model-requested-image-reference-without-reference" };
+        return {
+            kind,
+            mode,
+            useReferences,
+            confidence,
+            reason: typeof parsed.reason === "string" ? parsed.reason.slice(0, 120) : fallback.reason,
+        };
+    } catch {
+        return fallback;
+    }
+}
+
+function normalizeIntentKind(value: unknown): AssistantIntentKind | null {
+    if (value === "chat" || value === "image_analysis" || value === "image_generation" || value === "image_edit" || value === "image_split") return value;
+    return null;
 }
 
 function shouldUseImageReferences(text: string, references: CanvasAssistantReference[]) {
-    if (!references.some((item) => item.dataUrl)) return false;
-    return isReferenceCompositionTask(text, references) || isPerReferenceImageTask(text, references) || /(这张|这几张|选中|参考图|参考图片|原图|图片\s*\d+|根据选中|按照选中|基于选中|保持|一致|理解|分析|总结|提炼|风格|修改|编辑|改成|替换|调整|优化|重绘|变成|去掉|增加|换成|拆分|拆解|分解|提取|元素)/i.test(text);
+    if (!references.some(hasImageReference)) return false;
+    return isReferenceCompositionTask(text, references) || isPerReferenceImageTask(text, references) || hasImageEditIntent(text, references) || /(这张|这几张|选中|参考图|参考图片|原图|图片\s*\d+|根据选中|按照选中|基于选中|保持|一致|理解|分析|总结|提炼|风格|修改|编辑|改成|改为|替换|调整|优化|重绘|变成|去掉|增加|换成|换为|换一个|拆分|拆解|分解|提取|元素)/i.test(text);
 }
 
 function wantsImageOutput(text: string) {
-    return /(生成|创建|出|做|画|绘制|制作).{0,12}(图片|图像|海报|规范图|设计规范|视觉|icon|图标|素材|效果图)|^(图片|图像|海报|设计规范图)/i.test(text);
+    return /(生成|创建|出|做|画|绘制|制作).{0,12}(图片|图像|海报|规范图|设计规范|视觉|icon|图标|素材|效果图)|(生图|出图|重新出一张|再出一张)|^(图片|图像|海报|设计规范图)/i.test(text);
 }
 
 function wantsImageEdit(text: string, references: CanvasAssistantReference[]) {
-    return references.some((item) => item.dataUrl) && (isReferenceCompositionTask(text, references) || /(修改|改成|替换|调整|优化|重绘|变成|去掉|增加|保留|换成|编辑).{0,16}(图片|图|它|这个|风格|背景|颜色|元素)?/i.test(text));
+    return references.some(hasImageReference) && (isReferenceCompositionTask(text, references) || hasImageEditIntent(text, references) || /(修改|改成|改为|替换|调整|优化|重绘|变成|去掉|增加|保留|换成|换为|换一个|编辑).{0,16}(图片|图|它|这个|风格|背景|颜色|元素|姿势|构图|角度)?/i.test(text));
+}
+
+function hasImageEditIntent(text: string, references: CanvasAssistantReference[]) {
+    if (!references.some(hasImageReference)) return false;
+    const compactText = text.replace(/\s+/g, "");
+    if (!compactText) return false;
+    if (IMAGE_ANALYSIS_ONLY_PATTERN.test(compactText) && !IMAGE_EDIT_IMPERATIVE_PATTERN.test(compactText)) return false;
+    if (IMAGE_EDIT_DIRECTIVE_PATTERN.test(compactText)) return true;
+    return IMAGE_REFERENCE_POINTER_PATTERN.test(compactText) && IMAGE_EDIT_IMPERATIVE_PATTERN.test(compactText);
+}
+
+function wantsImageFromPreviousPrompt(text: string) {
+    return usesPreviousPrompt(text) && /(生成|创建|出|做|画|绘制|制作|生图|图片|图像|海报|效果图)/i.test(text);
 }
 
 function isSplitImageTask(text: string, references: CanvasAssistantReference[]) {
@@ -920,7 +1075,7 @@ function shouldPlanImageTasks(text: string, references: CanvasAssistantReference
 }
 
 function isReferenceElementSplitTask(text: string, references: CanvasAssistantReference[]) {
-    return references.some((item) => item.dataUrl) && /(拆分|拆解|分解|提取|元素).{0,18}(分别|单独|逐个|每个|一张|图片|生成)|分别.{0,18}(单独|逐个|每个).{0,18}(生成|出图|图片)/i.test(text);
+    return references.some(hasImageReference) && /(拆分|拆解|分解|提取|元素).{0,18}(分别|单独|逐个|每个|一张|图片|生成)|分别.{0,18}(单独|逐个|每个).{0,18}(生成|出图|图片)/i.test(text);
 }
 
 function wantsMultipleIndependentImages(text: string) {
@@ -931,7 +1086,7 @@ function wantsMultipleIndependentImages(text: string) {
 }
 
 function isReferenceCompositionTask(text: string, references: CanvasAssistantReference[]) {
-    return references.filter((item) => item.dataUrl).length > 1 && hasSingleCompositionIntent(text);
+    return references.filter(hasImageReference).length > 1 && hasSingleCompositionIntent(text);
 }
 
 function hasSingleCompositionIntent(text: string) {
@@ -940,14 +1095,17 @@ function hasSingleCompositionIntent(text: string) {
 }
 
 function isPerReferenceImageTask(text: string, references: CanvasAssistantReference[]) {
-    if (references.filter((item) => item.dataUrl).length <= 1 || hasSingleCompositionIntent(text)) return false;
+    if (references.filter(hasImageReference).length <= 1 || hasSingleCompositionIntent(text)) return false;
     return /((每张|每一张|每个|每一个|各自|分别|逐张|逐个|单独).{0,18}(图片|照片|图|参考图|选中)|(图片|照片|图|参考图|选中).{0,18}(每张|每一张|每个|每一个|各自|分别|逐张|逐个|单独)|(这些|这几张|多张|选中).{0,12}(都|全部|全都).{0,18}(修改|改成|替换|调整|优化|重绘|变成|去掉|增加|换成|编辑|生成|做成|处理))/i.test(text);
 }
 
-function resolveImagePrompt(text: string, history: CanvasAssistantMessage[]) {
+function resolveImagePrompt(text: string, history: CanvasAssistantMessage[], references: CanvasAssistantReference[] = []) {
     const current = text.trim();
     if (!current) return "";
-    if (!usesPreviousPrompt(current)) return current;
+    if (!usesPreviousPrompt(current)) {
+        const recentImagePrompt = references.some(hasImageReference) && shouldCarryRecentImageReference(current) ? findRecentAssistantImagePrompt(history, references) : "";
+        return recentImagePrompt ? `${recentImagePrompt}\n\n编辑要求：${current}` : current;
+    }
     const previousPrompt = findRecentAssistantPrompt(history);
     if (!previousPrompt) return "";
     const extra = extractImagePromptExtra(current);
@@ -964,6 +1122,24 @@ function findRecentAssistantPrompt(history: CanvasAssistantMessage[]) {
         if (message.role !== "assistant" || message.isLoading || message.images?.length) continue;
         const prompt = normalizeAssistantPromptCandidate(message.text);
         if (prompt) return prompt;
+    }
+    return "";
+}
+
+function findRecentAssistantImagePrompt(history: CanvasAssistantMessage[], references: CanvasAssistantReference[]) {
+    const referenceIds = new Set(references.filter(hasImageReference).map((item) => item.id));
+    let latestPrompt = "";
+    for (let index = history.length - 1; index >= 0; index -= 1) {
+        const message = history[index];
+        if (message.role !== "assistant" || message.isLoading || !message.images?.length) continue;
+        for (let imageIndex = message.images.length - 1; imageIndex >= 0; imageIndex -= 1) {
+            const image = message.images[imageIndex];
+            const prompt = normalizeAssistantPromptCandidate(image.prompt || "");
+            if (!prompt) continue;
+            latestPrompt ||= prompt;
+            if (referenceIds.has(image.id) || (image.insertedNodeId && referenceIds.has(image.insertedNodeId))) return prompt;
+        }
+        if (latestPrompt) return latestPrompt;
     }
     return "";
 }
@@ -1006,6 +1182,8 @@ async function buildImageTaskPlan(config: AiConfig, imagePrompt: string, userReq
         "人物写真或产品海报按姿势、动作、角度、场景或方案拆分。",
         "多张参考图不等于多张输出。用户要求合成、融合、组合、拼接到同一张、做成一张图时，必须输出 single，只创建 1 个任务，并在该任务 referenceIds 中放入所有相关参考节点 id。",
         "用户要求每张参考图分别处理、逐张处理、各自改图、每张生成一张时，才按参考图拆成多个任务；每个任务 referenceIds 只放对应参考节点 id。",
+        "只要本轮包含参考图片，并且用户要求改为、改成、换成、换一个、缩短、拉长、全身、半身、俯视、姿势、动作、构图、角度、服装、背景等视觉变化，必须视为图片编辑任务，execution.action 使用 edit_image，并携带对应 referenceIds。",
+        "用户说“帮我把这张图...”“改图”“修图”“换一个姿势”“改为全身图”等，不是在请求你输出提示词文字，而是在请求直接执行图片编辑。",
         "如果用户明确列出多个姿势词，例如坐着、站着、跪着、半身、全身、回眸、侧身，每个姿势词都必须成为一个独立任务，禁止遗漏。",
         "如果用户基于参考图片要求生成其他场景、不同场景或每个场景一张，优先拆成中性日常场景任务；不要自动加入躺姿、跪姿、暴露服装或暧昧姿态。",
         "可用角色包括：创意总监、提示词工程师、摄影导演、UI 设计师、品牌视觉设计师、风格分析师、元素拆分师、图片编辑师。根据任务选择角色，角色名要短。",
@@ -1101,7 +1279,7 @@ function normalizeImageTaskPlan(plan: ImageTaskPlan, imagePrompt: string, userRe
 function fallbackImageTaskPlan(imagePrompt: string, userRequest: string, references: CanvasAssistantReference[] = []): ImageTaskPlan {
     const combined = `${userRequest}\n${imagePrompt}`;
     const action = resolveImageAction(userRequest, references);
-    const imageReferences = references.filter((item) => item.dataUrl);
+    const imageReferences = references.filter(hasImageReference);
     if (isReferenceCompositionTask(combined, references)) {
         return {
             intent: "多参考图合成",
@@ -1310,7 +1488,7 @@ function enforceSingleImagePrompt(prompt: string, context: { action?: string; ti
 }
 
 function enforceReferenceConsistencyPrompt(prompt: string, sourceText: string, references: CanvasAssistantReference[]) {
-    if (!references.some((item) => item.dataUrl)) return prompt;
+    if (!references.some(hasImageReference)) return prompt;
     const parsed = parseJsonObject(prompt);
     if (!parsed) return prompt;
     const subject = extractNamedSubject(sourceText);
@@ -1343,7 +1521,7 @@ function extractReferenceSceneTasks(text: string, references: CanvasAssistantRef
 }
 
 function shouldPlanReferenceScenes(text: string, references: CanvasAssistantReference[]) {
-    if (!references.some((item) => item.dataUrl)) return false;
+    if (!references.some(hasImageReference)) return false;
     return /(其他|不同|多个|每个|每张|各自|单独).{0,16}(场景|环境|地点|背景)|(场景|环境|地点|背景).{0,16}(其他|不同|多个|每个|每张|各自|单独)/i.test(text);
 }
 
@@ -1364,7 +1542,7 @@ function sanitizePromptSubject(value: unknown, subject: string): unknown {
 function resolveImageAction(text: string, references: CanvasAssistantReference[]) {
     if (isReferenceElementSplitTask(text, references)) return "extract_elements_to_images";
     if (wantsImageEdit(text, references)) return "edit_image";
-    if (references.some((item) => item.dataUrl) && /(分析|总结|提炼|归纳|风格|规范|设计系统|design system)/i.test(text)) return "analyze_reference_and_generate_image";
+    if (references.some(hasImageReference) && /(分析|总结|提炼|归纳|风格|规范|设计系统|design system)/i.test(text)) return "analyze_reference_and_generate_image";
     return "generate_image";
 }
 
@@ -1588,7 +1766,7 @@ async function buildChatMessages(messages: CanvasAssistantMessage[], memory?: Ca
                 content: [
                     ...refs.flatMap((item) => (item.text ? [{ type: "text" as const, text: item.text }] : [])),
                     { type: "text", text: message.text },
-                    ...(await Promise.all(refs.filter((item) => item.dataUrl).map(async (item) => ({ type: "image_url" as const, image_url: { url: await imageToDataUrl(item) } })))),
+                    ...(await Promise.all(refs.filter(hasImageReference).map(async (item) => ({ type: "image_url" as const, image_url: { url: await imageToDataUrl(item) } })))),
                 ],
             };
         }),
