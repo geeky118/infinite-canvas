@@ -112,8 +112,9 @@ func ModelCost(modelName string) (int, error) {
 		return 0, err
 	}
 	modelName = strings.TrimSpace(modelName)
+	aliases := modelNameAliases(modelName)
 	for _, item := range normalizePublicSetting(settings.Public).ModelChannel.ModelCosts {
-		if item.Model == modelName {
+		if aliases[item.Model] {
 			return item.Credits, nil
 		}
 	}
@@ -473,16 +474,27 @@ func (err safeMessageError) SafeMessage() string {
 
 func modelChannelsForModel(channels []model.ModelChannel, modelName string) []model.ModelChannel {
 	result := []model.ModelChannel{}
+	aliases := modelNameAliases(modelName)
 	for _, channel := range channels {
 		if !channel.Enabled || channel.BaseURL == "" || channel.APIKey == "" {
 			continue
 		}
 		for _, item := range channel.Models {
-			if strings.TrimSpace(item) == modelName {
+			if aliases[strings.TrimSpace(item)] {
 				result = append(result, channel)
 				break
 			}
 		}
 	}
 	return result
+}
+
+func modelNameAliases(modelName string) map[string]bool {
+	modelName = strings.TrimSpace(modelName)
+	aliases := map[string]bool{modelName: true}
+	if modelName == "grok-imagine-video" || modelName == "grok-imagine-1.0-video" {
+		aliases["grok-imagine-video"] = true
+		aliases["grok-imagine-1.0-video"] = true
+	}
+	return aliases
 }

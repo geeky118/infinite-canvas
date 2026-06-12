@@ -214,7 +214,7 @@ func readAIRequestCount(body []byte, contentType string) int {
 var errMissingModel = &aiError{"缺少模型名称"}
 
 func resolveAIProxyPath(baseURL string, modelName string, path string) string {
-	if !isArkSeedanceVideo(baseURL, modelName) {
+	if isGrokOpenAIVideo(modelName) || !isArkSeedanceVideo(baseURL, modelName) {
 		return path
 	}
 	if path == "/videos" {
@@ -230,6 +230,11 @@ func isArkSeedanceVideo(baseURL string, modelName string) bool {
 	base := strings.ToLower(baseURL)
 	model := strings.ToLower(modelName)
 	return strings.Contains(model, "seedance") || strings.Contains(model, "doubao-seedance") || strings.Contains(base, "/api/plan/v3")
+}
+
+func isGrokOpenAIVideo(modelName string) bool {
+	model := strings.ToLower(strings.TrimSpace(modelName))
+	return model == "grok-imagine-video" || model == "grok-imagine-1.0-video"
 }
 
 func aiStatusMessage(statusCode int) string {

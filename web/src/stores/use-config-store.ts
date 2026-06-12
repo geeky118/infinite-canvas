@@ -422,6 +422,9 @@ function channelHasModel(channel: AiLocalChannel, model: string) {
 }
 
 function modelAliases(model: string) {
+    if (model === "grok-imagine-video" || model === "grok-imagine-1.0-video") {
+        return ["grok-imagine-video", "grok-imagine-1.0-video"];
+    }
     if (model === "grok-imagine-1.0" || model === "grok-imagine-1.0-fast" || model === "grok-imagine-1.0-edit") {
         return ["grok-imagine-1.0", "grok-imagine-1.0-fast", "grok-imagine-1.0-edit"];
     }

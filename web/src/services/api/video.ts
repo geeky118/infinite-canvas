@@ -59,7 +59,7 @@ export async function requestVideoGeneration(config: AiConfig, prompt: string, r
 }
 
 export async function createVideoGenerationTask(config: AiConfig, prompt: string, references: ReferenceImage[] = [], videoReferences: ReferenceVideo[] = [], audioReferences: ReferenceAudio[] = []): Promise<VideoGenerationTask> {
-    const model = (config.model || config.videoModel).trim();
+    const model = resolveVideoModel(config);
     const requestConfig = resolveRequestConfig(config, model);
     assertVideoConfig(requestConfig, model);
     if (isSeedanceVideoConfig({ ...requestConfig, model })) {
@@ -260,6 +260,21 @@ function assertVideoConfig(config: AiConfig, model: string) {
     if (!model) throw new Error("请先配置视频模型");
     if (config.channelMode === "local" && !config.baseUrl.trim()) throw new Error("请先配置 Base URL");
     if (config.channelMode === "local" && !config.apiKey.trim()) throw new Error("请先配置 API Key");
+}
+
+function resolveVideoModel(config: AiConfig) {
+    const model = (config.model || "").trim();
+    if (isVideoModelName(model)) return normalizeGrokVideoModel(model);
+    return normalizeGrokVideoModel((config.videoModel || model).trim());
+}
+
+function isVideoModelName(model: string) {
+    const value = model.toLowerCase();
+    return value.includes("seedance") || value.includes("video") || value.includes("sora") || value.includes("veo") || value.includes("kling") || value.includes("wan") || value.includes("hailuo");
+}
+
+function normalizeGrokVideoModel(model: string) {
+    return model === "grok-imagine-video" ? "grok-imagine-1.0-video" : model;
 }
 
 function normalizeVideoSeconds(value: string) {

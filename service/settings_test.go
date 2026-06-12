@@ -98,3 +98,16 @@ func TestNormalizeSettingsPublishesEnabledChannelModelsAndRepairsDefaults(t *tes
 		t.Fatalf("default video model = %q, want seedance", channel.DefaultVideoModel)
 	}
 }
+
+func TestModelChannelsForModelMatchesGrokVideoAliases(t *testing.T) {
+	channels := []model.ModelChannel{
+		{Enabled: true, BaseURL: "https://grok.example", APIKey: "key", Models: []string{"grok-imagine-video"}},
+		{Enabled: true, BaseURL: "https://grok2.example", APIKey: "key", Models: []string{"grok-imagine-1.0-video"}},
+		{Enabled: true, BaseURL: "https://seedance.example", APIKey: "key", Models: []string{"doubao-seedance-2.0-fast"}},
+	}
+
+	got := modelChannelsForModel(channels, "grok-imagine-1.0-video")
+	if len(got) != 2 {
+		t.Fatalf("channels = %d, want 2", len(got))
+	}
+}
