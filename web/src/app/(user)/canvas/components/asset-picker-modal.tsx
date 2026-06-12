@@ -9,10 +9,11 @@ import axios from "axios";
 import { cn } from "@/lib/utils";
 import { useAssetStore, type Asset } from "@/stores/use-asset-store";
 import { fetchAssetLibrary, type AssetLibraryItem } from "@/services/api/assets";
+import { canvasTextSelectionStyle, copySelectedTextFromTextControl } from "../utils/canvas-text-clipboard";
 
 export type AssetPickerTab = "my-assets" | "library";
 
-export type InsertAssetPayload = { kind: "text"; content: string; title: string } | { kind: "image"; dataUrl: string; title: string; storageKey?: string } | { kind: "video"; url: string; title: string; storageKey?: string; width?: number; height?: number };
+export type InsertAssetPayload = { kind: "text"; content: string; title: string } | { kind: "image"; dataUrl: string; title: string; storageKey?: string; remoteUrl?: string } | { kind: "video"; url: string; title: string; storageKey?: string; width?: number; height?: number };
 
 type Props = {
     open: boolean;
@@ -93,6 +94,8 @@ function LibraryTab({ onInsert }: { onInsert: (payload: InsertAssetPayload) => v
                     placeholder="搜索素材"
                     value={keyword}
                     allowClear
+                    style={canvasTextSelectionStyle}
+                    onCopy={copySelectedTextFromTextControl}
                     onChange={(e) => {
                         setPage(1);
                         setKeyword(e.target.value);
@@ -207,7 +210,7 @@ function MyAssetsTab({ onInsert }: { onInsert: (payload: InsertAssetPayload) => 
         if (asset.kind === "text") {
             onInsert({ kind: "text", content: asset.data.content, title: asset.title });
         } else {
-            onInsert(asset.kind === "video" ? { kind: "video", url: asset.data.url, storageKey: asset.data.storageKey, title: asset.title, width: asset.data.width, height: asset.data.height } : { kind: "image", dataUrl: asset.data.dataUrl, storageKey: asset.data.storageKey, title: asset.title });
+            onInsert(asset.kind === "video" ? { kind: "video", url: asset.data.url, storageKey: asset.data.storageKey, title: asset.title, width: asset.data.width, height: asset.data.height } : { kind: "image", dataUrl: asset.data.dataUrl, storageKey: asset.data.storageKey, remoteUrl: asset.data.remoteUrl, title: asset.title });
         }
     };
 
@@ -221,6 +224,8 @@ function MyAssetsTab({ onInsert }: { onInsert: (payload: InsertAssetPayload) => 
                     placeholder="搜索素材"
                     value={keyword}
                     allowClear
+                    style={canvasTextSelectionStyle}
+                    onCopy={copySelectedTextFromTextControl}
                     onChange={(e) => {
                         setPage(1);
                         setKeyword(e.target.value);

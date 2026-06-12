@@ -89,12 +89,16 @@ func Register(username string, password string) (model.AuthSession, error) {
 		Username:  username,
 		Password:  hash,
 		Role:      model.UserRoleUser,
+		Credits:   normalizedSettings.Public.Marketing.RegisterCredits,
 		AffCode:   newAffCode(),
 		Status:    model.UserStatusActive,
 		CreatedAt: now(),
 		UpdatedAt: now(),
 	})
 	if err != nil {
+		return model.AuthSession{}, err
+	}
+	if err := saveRegisterRewardLog(user, normalizedSettings.Public.Marketing.RegisterCredits); err != nil {
 		return model.AuthSession{}, err
 	}
 	return newSession(user)
@@ -170,6 +174,7 @@ func LoginWithLinuxDo(r *http.Request, code string, state string) (model.AuthSes
 	if err != nil {
 		return model.AuthSession{}, redirect, err
 	}
+	isCreate := !ok
 	if !ok {
 		if settings.Public.Auth.AllowRegister != nil && !*settings.Public.Auth.AllowRegister {
 			return model.AuthSession{}, redirect, safeMessageError{message: "当前未开放注册"}
@@ -180,6 +185,7 @@ func LoginWithLinuxDo(r *http.Request, code string, state string) (model.AuthSes
 			DisplayName: strings.TrimSpace(profile.Name),
 			AvatarURL:   linuxDoAvatar(profile.AvatarTemplate),
 			Role:        model.UserRoleUser,
+			Credits:     settings.Public.Marketing.RegisterCredits,
 			AffCode:     newAffCode(),
 			LinuxDoID:   linuxDoID,
 			Status:      model.UserStatusActive,
@@ -197,6 +203,11 @@ func LoginWithLinuxDo(r *http.Request, code string, state string) (model.AuthSes
 	user, err = repository.SaveUser(user)
 	if err != nil {
 		return model.AuthSession{}, redirect, err
+	}
+	if isCreate {
+		if err := saveRegisterRewardLog(user, settings.Public.Marketing.RegisterCredits); err != nil {
+			return model.AuthSession{}, redirect, err
+		}
 	}
 	session, err := newSession(user)
 	return session, redirect, err
@@ -274,6 +285,9 @@ func SaveUser(user model.User, password string) (model.User, error) {
 		user.Password = saved.Password
 		user.AvatarURL = saved.AvatarURL
 		user.Credits = saved.Credits
+		user.SubscriptionID = saved.SubscriptionID
+		user.SubscriptionName = saved.SubscriptionName
+		user.SubscriptionExpireAt = saved.SubscriptionExpireAt
 		user.Extra = saved.Extra
 		if user.AffCode == "" {
 			user.AffCode = saved.AffCode
@@ -374,6 +388,22 @@ func RefundUserCredits(userID string, modelName string, credits int, path string
 		Balance:   user.Credits,
 		Remark:    "模型调用失败返还 " + modelName,
 		Extra:     string(extra),
+		CreatedAt: now(),
+	})
+	return err
+}
+
+func saveRegisterRewardLog(user model.User, credits int) error {
+	if credits <= 0 {
+		return nil
+	}
+	_, err := repository.SaveCreditLog(model.CreditLog{
+		ID:        newID("credit"),
+		UserID:    user.ID,
+		Type:      model.CreditLogTypeRegister,
+		Amount:    credits,
+		Balance:   user.Credits,
+		Remark:    "新用户注册奖励",
 		CreatedAt: now(),
 	})
 	return err

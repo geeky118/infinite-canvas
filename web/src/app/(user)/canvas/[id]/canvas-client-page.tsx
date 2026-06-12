@@ -10,7 +10,7 @@ import { requestEdit, requestGeneration, requestImageQuestion } from "@/services
 import { requestAudioGeneration, storeGeneratedAudio } from "@/services/api/audio";
 import { requestVideoGeneration, storeGeneratedVideo } from "@/services/api/video";
 import { defaultConfig, type AiConfig, useConfigStore, useEffectiveConfig } from "@/stores/use-config-store";
-import { resolveImageUrl, uploadImage, type UploadedImage } from "@/services/image-storage";
+import { createRemoteImageFallback, isRemoteHttpImageUrl, resolveImageUrl, uploadImage, type UploadedImage } from "@/services/image-storage";
 import { resolveMediaUrl, uploadMediaFile, type UploadedFile } from "@/services/file-storage";
 import { nanoid } from "nanoid";
 import { getDataUrlByteSize, readImageMeta } from "@/lib/image-utils";
@@ -44,6 +44,7 @@ import { AssetPickerModal, type AssetPickerTab, type InsertAssetPayload } from "
 import { CanvasZoomControls } from "../components/canvas-zoom-controls";
 import { useCanvasStore } from "../stores/use-canvas-store";
 import { buildCanvasResourceReferences, buildNodeMentionReferences } from "../utils/canvas-resource-references";
+import { canvasTextSelectionStyle, copySelectedTextFromTextControl } from "../utils/canvas-text-clipboard";
 import {
     CanvasNodeType,
     type CanvasAssistantImage,
@@ -248,6 +249,7 @@ function InfiniteCanvasPage() {
     const addAsset = useAssetStore((state) => state.addAsset);
     const cleanupAssetImages = useAssetStore((state) => state.cleanupImages);
     const hydrated = useCanvasStore((state) => state.hydrated);
+    const cloudHydrated = useCanvasStore((state) => state.cloudHydrated);
     const createProject = useCanvasStore((state) => state.createProject);
     const openProject = useCanvasStore((state) => state.openProject);
     const updateProject = useCanvasStore((state) => state.updateProject);
@@ -297,8 +299,8 @@ function InfiniteCanvasPage() {
     const [superResolveNodeId, setSuperResolveNodeId] = useState<string | null>(null);
     const [angleNodeId, setAngleNodeId] = useState<string | null>(null);
     const [previewNodeId, setPreviewNodeId] = useState<string | null>(null);
-    const [assistantCollapsed, setAssistantCollapsed] = useState(true);
-    const [assistantMounted, setAssistantMounted] = useState(false);
+    const [assistantCollapsed, setAssistantCollapsed] = useState(false);
+    const [assistantMounted, setAssistantMounted] = useState(true);
     const [titleEditing, setTitleEditing] = useState(false);
     const [titleDraft, setTitleDraft] = useState("");
     const [historyState, setHistoryState] = useState({ canUndo: false, canRedo: false });
@@ -336,7 +338,7 @@ function InfiniteCanvasPage() {
     );
 
     useEffect(() => {
-        if (!hydrated) return;
+        if (!hydrated || !cloudHydrated) return;
         setProjectLoaded(false);
         const project = openProject(projectId);
         if (!project) {
@@ -371,7 +373,7 @@ function InfiniteCanvasPage() {
             setProjectLoaded(true);
         };
         void restore();
-    }, [hydrated, openProject, projectId, router]);
+    }, [cloudHydrated, hydrated, openProject, projectId, router]);
 
     useEffect(() => {
         if (!projectLoaded || typeof window === "undefined") return;
@@ -1460,6 +1462,7 @@ function InfiniteCanvasPage() {
                 data: {
                     dataUrl,
                     storageKey: node.metadata.storageKey,
+                    remoteUrl: node.metadata.remoteUrl,
                     width: node.metadata.naturalWidth || node.width,
                     height: node.metadata.naturalHeight || node.height,
                     bytes: node.metadata.bytes || getDataUrlByteSize(dataUrl),
@@ -1650,7 +1653,7 @@ function InfiniteCanvasPage() {
             const userPrompt = payload.prompt.trim();
             const prompt = `只修改蒙版透明区域，其他区域保持不变。${userPrompt}`;
             const childId = nanoid();
-            const source = { id: node.id, name: `${node.title || node.id}.png`, type: node.metadata.mimeType || "image/png", dataUrl: node.metadata.content, storageKey: node.metadata.storageKey };
+            const source = nodeReferenceImage(node);
             const generationMetadata = buildImageGenerationMetadata("edit", generationConfig, 1, [source]);
             setMaskEditNodeId(null);
             setRunningNodeId(childId);
@@ -1724,7 +1727,7 @@ function InfiniteCanvasPage() {
             const title = buildAngleLabel(params);
             const prompt = buildAnglePrompt(params);
             const generationMetadata = buildImageGenerationMetadata("edit", generationConfig, 1, [
-                { id: node.id, name: `${node.title || node.id}.png`, type: node.metadata.mimeType || "image/png", dataUrl: node.metadata.content, storageKey: node.metadata.storageKey },
+                nodeReferenceImage(node),
             ]);
             setAngleNodeId(null);
             setRunningNodeId(childId);
@@ -1744,7 +1747,7 @@ function InfiniteCanvasPage() {
             setSelectedNodeIds(new Set([childId]));
             setDialogNodeId(childId);
             try {
-                const image = await requestEdit(generationConfig, prompt, [{ id: node.id, name: `${node.title || node.id}.png`, type: node.metadata.mimeType || "image/png", dataUrl: node.metadata.content, storageKey: node.metadata.storageKey }]).then(
+                const image = await requestEdit(generationConfig, prompt, [nodeReferenceImage(node)]).then(
                     (items) => items[0],
                 );
                 const uploaded = await uploadImage(image.dataUrl);
@@ -1969,7 +1972,7 @@ function InfiniteCanvasPage() {
                     const isEmptyImageNode = isImageNode && !sourceNode?.metadata?.content;
                     const sourceReference =
                         isImageNode && sourceNode?.metadata?.content
-                            ? [{ id: sourceNode.id, name: `${sourceNode.title || sourceNode.id}.png`, type: sourceNode.metadata.mimeType || "image/png", dataUrl: sourceNode.metadata.content, storageKey: sourceNode.metadata.storageKey }]
+                            ? [nodeReferenceImage(sourceNode)]
                             : [];
                     const referenceImages = sourceReference.length ? sourceReference : generationContext.referenceImages;
                     const generationType = referenceImages.length ? ("edit" as const) : ("generation" as const);
@@ -2400,8 +2403,12 @@ function InfiniteCanvasPage() {
             for (const image of images) {
                 const targetNodeId = image.insertedNodeId || image.id;
                 try {
-                    const imageUrl = image.storageKey ? await resolveImageUrl(image.storageKey, image.dataUrl) : image.dataUrl;
-                    const storedImage = image.storageKey ? { url: imageUrl, storageKey: image.storageKey, width: 1, height: 1, bytes: 0, mimeType: "image/png" } : await uploadImage(image.dataUrl);
+                    const imageUrl = image.storageKey ? await resolveImageUrl(image.storageKey, image.dataUrl, image.remoteUrl) : image.dataUrl || image.remoteUrl || "";
+                    const storedImage = image.storageKey
+                        ? { url: imageUrl, storageKey: image.storageKey, remoteUrl: image.remoteUrl, width: 1, height: 1, bytes: 0, mimeType: "image/png" }
+                        : isRemoteHttpImageUrl(imageUrl)
+                          ? await createRemoteImageFallback(imageUrl)
+                          : await uploadImage(imageUrl);
                     const meta = storedImage.width === 1 && storedImage.url ? await readImageMeta(storedImage.url) : storedImage;
                     const config = assistantImageNodeSize(meta.width, meta.height);
 
@@ -2414,7 +2421,7 @@ function InfiniteCanvasPage() {
                             center: getCanvasCenter(),
                         }),
                     );
-                    insertedImages.push({ ...image, dataUrl: storedImage.url, storageKey: storedImage.storageKey, insertedNodeId: targetNodeId });
+                    insertedImages.push({ ...image, dataUrl: storedImage.url, storageKey: storedImage.storageKey || undefined, remoteUrl: storedImage.remoteUrl || image.remoteUrl, insertedNodeId: targetNodeId });
                 } catch {
                     failedCount += 1;
                     completionFailedIds.push(targetNodeId);
@@ -2479,7 +2486,7 @@ function InfiniteCanvasPage() {
                 setNodes((prev) => [...prev, { id, type: CanvasNodeType.Video, title: payload.title, position: { x: center.x - nextSize.width / 2, y: center.y - nextSize.height / 2 }, width: nextSize.width, height: nextSize.height, metadata: { content: payload.url, storageKey: payload.storageKey, status: NODE_STATUS_SUCCESS, naturalWidth: payload.width, naturalHeight: payload.height } }]);
                 setSelectedNodeIds(new Set([id]));
             } else {
-                insertAssistantImage({ id: `asset-${Date.now()}`, prompt: payload.title, dataUrl: payload.dataUrl, storageKey: payload.storageKey });
+                insertAssistantImage({ id: `asset-${Date.now()}`, prompt: payload.title, dataUrl: payload.dataUrl, storageKey: payload.storageKey, remoteUrl: payload.remoteUrl });
             }
             setAssetPickerOpen(false);
         },
@@ -2828,9 +2835,11 @@ function InfiniteCanvasPage() {
                         {projectPromptMode === "edit" ? (
                             <Input.TextArea
                                 className="!h-full font-mono text-sm"
+                                style={{ caretColor: theme.node.activeStroke, ...canvasTextSelectionStyle }}
                                 value={projectPromptDraft}
                                 placeholder={"为当前项目设置专属系统提示词，支持 Markdown。\n\n示例：\n# 角色\n你是品牌视觉顾问。\n\n## 输出要求\n- 先给结论\n- 再给可执行步骤"}
                                 onChange={(event) => setProjectPromptDraft(event.target.value)}
+                                onCopy={copySelectedTextFromTextControl}
                             />
                         ) : (
                             <MarkdownPreview content={projectPromptDraft} />
@@ -2966,8 +2975,9 @@ function CanvasTopBar({
                                     if (event.key === "Enter") onFinishTitleEditing();
                                     if (event.key === "Escape") onCancelTitleEditing();
                                 }}
-                                className="max-w-[280px] bg-transparent p-0 text-left text-lg font-semibold tracking-normal outline-none"
-                                style={{ color: theme.node.text }}
+                                className="max-w-[280px] select-text bg-transparent p-0 text-left text-lg font-semibold tracking-normal outline-none"
+                                style={{ color: theme.node.text, caretColor: theme.node.activeStroke, ...canvasTextSelectionStyle }}
+                                onCopy={copySelectedTextFromTextControl}
                             />
                         ) : (
                             <button
@@ -3076,7 +3086,11 @@ function audioExtension(mimeType?: string) {
 }
 
 function imageMetadata(image: UploadedImage): CanvasNodeMetadata {
-    return { content: image.url, storageKey: image.storageKey, status: "success", naturalWidth: image.width, naturalHeight: image.height, bytes: image.bytes, mimeType: image.mimeType };
+    return { content: image.url, storageKey: image.storageKey || undefined, remoteUrl: image.remoteUrl, remoteKey: image.remoteKey, status: "success", naturalWidth: image.width, naturalHeight: image.height, bytes: image.bytes, mimeType: image.mimeType };
+}
+
+function nodeReferenceImage(node: CanvasNodeData): ReferenceImage {
+    return { id: node.id, name: `${node.title || node.id}.png`, type: node.metadata?.mimeType || "image/png", dataUrl: node.metadata?.content || "", storageKey: node.metadata?.storageKey, remoteUrl: node.metadata?.remoteUrl };
 }
 
 function assistantImageNodeSize(width: number, height: number) {
@@ -3322,7 +3336,7 @@ function buildAudioGenerationMetadata(config: AiConfig): CanvasNodeMetadata {
 }
 
 function referenceUrl(image: ReferenceImage) {
-    return image.storageKey || image.url || (!image.dataUrl.startsWith("data:") ? image.dataUrl : undefined);
+    return image.remoteUrl || image.storageKey || image.url || (!image.dataUrl.startsWith("data:") ? image.dataUrl : undefined);
 }
 
 function generationReferenceUrls(context: { referenceImages: ReferenceImage[]; referenceVideos: Array<{ storageKey?: string; url?: string }>; referenceAudios?: Array<{ storageKey?: string; url?: string }> }) {
@@ -3351,7 +3365,7 @@ async function hydrateCanvasImages(nodes: CanvasNodeData[]) {
             const content = node.metadata?.content;
             if ((node.type === CanvasNodeType.Video || node.type === CanvasNodeType.Audio) && node.metadata?.storageKey) return { ...node, metadata: { ...node.metadata, content: await resolveMediaUrl(node.metadata.storageKey, content) } };
             if (node.type !== CanvasNodeType.Image || !content) return node;
-            if (node.metadata?.storageKey) return { ...node, metadata: { ...node.metadata, content: await resolveImageUrl(node.metadata.storageKey, content) } };
+            if (node.metadata?.storageKey) return { ...node, metadata: { ...node.metadata, content: await resolveImageUrl(node.metadata.storageKey, content, node.metadata.remoteUrl) } };
             if (!content.startsWith("data:image/")) return node;
             return { ...node, metadata: { ...node.metadata, ...imageMetadata(await uploadImage(content)) } };
         }),
@@ -3436,15 +3450,7 @@ function findRetrySourceNode(nodeId: string, nodes: CanvasNodeData[], connection
 
 function sourceNodeReferenceImages(node: CanvasNodeData | null) {
     if (!node || node.type !== CanvasNodeType.Image || !node.metadata?.content) return [];
-    return [
-        {
-            id: node.id,
-            name: `${node.title || node.id}.png`,
-            type: node.metadata.mimeType || "image/png",
-            dataUrl: node.metadata.content,
-            storageKey: node.metadata.storageKey,
-        },
-    ];
+    return [nodeReferenceImage(node)];
 }
 
 function isAudioFile(file: File) {

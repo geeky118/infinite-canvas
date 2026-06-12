@@ -62,7 +62,7 @@ export const CONFIG_STORE_KEY = "infinite-canvas:ai_config_store";
 export type ModelCapability = "image" | "video" | "text" | "audio";
 
 export const defaultConfig: AiConfig = {
-    channelMode: "local",
+    channelMode: "remote",
     baseUrl: "https://api.openai.com",
     apiKey: "",
     localChannels: readDefaultLocalChannels(),

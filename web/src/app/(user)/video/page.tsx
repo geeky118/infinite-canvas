@@ -122,7 +122,7 @@ export default function VideoPage() {
         const nextReferences = await Promise.all(
             imageFiles.map(async (file) => {
                 const image = await uploadImage(file);
-                return { id: nanoid(), name: file.name, type: image.mimeType, dataUrl: image.url, storageKey: image.storageKey };
+                return { id: nanoid(), name: file.name, type: image.mimeType, dataUrl: image.url, storageKey: image.storageKey, remoteUrl: image.remoteUrl };
             }),
         );
         const nextVideoReferences = await Promise.all(
@@ -157,7 +157,7 @@ export default function VideoPage() {
             const nextReferences = await Promise.all(
                 blobs.slice(0, SEEDANCE_REFERENCE_LIMITS.images - references.length).map(async (blob, index) => {
                     const image = await uploadImage(blob);
-                    return { id: nanoid(), name: `clipboard-${index + 1}.png`, type: image.mimeType, dataUrl: image.url, storageKey: image.storageKey };
+                    return { id: nanoid(), name: `clipboard-${index + 1}.png`, type: image.mimeType, dataUrl: image.url, storageKey: image.storageKey, remoteUrl: image.remoteUrl };
                 }),
             );
             setReferences((value) => [...value, ...nextReferences].slice(0, SEEDANCE_REFERENCE_LIMITS.images));
@@ -233,8 +233,9 @@ export default function VideoPage() {
         if (payload.kind === "text") {
             setPrompt(payload.content);
         } else if (payload.kind === "image") {
-            const stored = await uploadImage(payload.dataUrl);
-            setReferences((value) => [...value, { id: nanoid(), name: payload.title, type: stored.mimeType, dataUrl: stored.url, storageKey: stored.storageKey }].slice(0, SEEDANCE_REFERENCE_LIMITS.images));
+            const dataUrl = payload.storageKey ? await resolveImageUrl(payload.storageKey, payload.dataUrl, payload.remoteUrl) : payload.dataUrl || payload.remoteUrl || "";
+            const stored = payload.storageKey ? { url: dataUrl, storageKey: payload.storageKey, remoteUrl: payload.remoteUrl, mimeType: "image/png" } : await uploadImage(dataUrl);
+            setReferences((value) => [...value, { id: nanoid(), name: payload.title, type: stored.mimeType, dataUrl: stored.url, storageKey: stored.storageKey, remoteUrl: stored.remoteUrl }].slice(0, SEEDANCE_REFERENCE_LIMITS.images));
         } else if (payload.kind === "video") {
             setVideoReferences((value) => [...value, { id: nanoid(), name: payload.title, type: "video/mp4", url: payload.url, storageKey: payload.storageKey, width: payload.width, height: payload.height }].slice(0, SEEDANCE_REFERENCE_LIMITS.videos));
         }
@@ -698,7 +699,7 @@ async function normalizeLog(log: Partial<GenerationLog>): Promise<GenerationLog>
     const references = await Promise.all(
         (log.references || []).map(async (item) => ({
             ...item,
-            dataUrl: await resolveImageUrl(item.storageKey, item.dataUrl),
+            dataUrl: await resolveImageUrl(item.storageKey, item.dataUrl, item.remoteUrl),
         })),
     );
     const config = normalizeLogConfig(log);

@@ -7,6 +7,7 @@ import { FileText, Image as ImageIcon, Music2, Video } from "lucide-react";
 
 import { canvasThemes } from "@/lib/canvas-theme";
 import { useThemeStore } from "@/stores/use-theme-store";
+import { canvasTextSelectionStyle, copySelectedTextFromTextControl } from "../utils/canvas-text-clipboard";
 import type { CanvasResourceReference } from "../utils/canvas-resource-references";
 
 type MentionState = {
@@ -30,6 +31,7 @@ export const CanvasResourceMentionTextarea = forwardRef<HTMLTextAreaElement, Pro
     const [mention, setMention] = useState<MentionState | null>(null);
     const [activeIndex, setActiveIndex] = useState(0);
     const [hasSelection, setHasSelection] = useState(false);
+    const [isFocused, setIsFocused] = useState(false);
     const candidates = useMemo(() => {
         if (!mention) return [];
         const query = mention.query.trim().toLowerCase();
@@ -85,17 +87,18 @@ export const CanvasResourceMentionTextarea = forwardRef<HTMLTextAreaElement, Pro
         setHasSelection(Boolean(textarea && textarea.selectionStart !== textarea.selectionEnd));
     };
 
-    const showOverlay = Boolean(activeLabels.length && !hasSelection);
+    const showOverlay = Boolean(activeLabels.length && !hasSelection && !isFocused);
     const mergedStyle = {
         ...(style || {}),
         color: showOverlay ? "transparent" : style?.color,
-        caretColor: style?.color || theme.node.text,
+        caretColor: style?.caretColor || theme.node.activeStroke,
+        ...canvasTextSelectionStyle,
         ...(showOverlay ? { background: "transparent", backgroundColor: "transparent" } : {}),
     } as CSSProperties;
     const menu = mention && candidates.length && textareaRef.current ? <MentionMenu textarea={textareaRef.current} references={candidates} activeIndex={Math.min(activeIndex, candidates.length - 1)} theme={theme} onSelect={insertReference} /> : null;
 
     return (
-        <div className={`relative h-full w-full ${containerClassName || ""}`}>
+        <div className={`relative h-full w-full select-text ${containerClassName || ""}`}>
             {showOverlay ? (
                 <div ref={overlayRef} className={`${className || ""} pointer-events-none absolute inset-0 overflow-hidden whitespace-pre-wrap break-words`} style={{ ...style, color: theme.node.text }}>
                     <MentionHighlightText value={value || props.placeholder?.toString() || ""} labels={activeLabels} placeholder={!value} />
@@ -109,7 +112,7 @@ export const CanvasResourceMentionTextarea = forwardRef<HTMLTextAreaElement, Pro
                     else if (forwardedRef) forwardedRef.current = node;
                 }}
                 value={value}
-                className={className}
+                className={`${className || ""} select-text`}
                 style={mergedStyle}
                 onChange={(event) => {
                     const next = event.target.value;
@@ -132,7 +135,13 @@ export const CanvasResourceMentionTextarea = forwardRef<HTMLTextAreaElement, Pro
                     updateSelectionState();
                     props.onPointerUp?.(event);
                 }}
+                onFocus={(event) => {
+                    setIsFocused(true);
+                    updateSelectionState();
+                    props.onFocus?.(event);
+                }}
                 onKeyDown={(event) => {
+                    event.stopPropagation();
                     if (mention && candidates.length) {
                         if (event.key === "ArrowDown") {
                             event.preventDefault();
@@ -162,11 +171,24 @@ export const CanvasResourceMentionTextarea = forwardRef<HTMLTextAreaElement, Pro
                     }
                     onKeyDown?.(event);
                 }}
+                onCopy={(event) => {
+                    copySelectedTextFromTextControl(event);
+                    props.onCopy?.(event);
+                }}
+                onCut={(event) => {
+                    event.stopPropagation();
+                    props.onCut?.(event);
+                }}
+                onPaste={(event) => {
+                    event.stopPropagation();
+                    props.onPaste?.(event);
+                }}
                 onScroll={(event) => {
                     syncOverlayScroll();
                     props.onScroll?.(event);
                 }}
                 onBlur={(event) => {
+                    setIsFocused(false);
                     setHasSelection(false);
                     window.setTimeout(closeMention, 120);
                     props.onBlur?.(event);

@@ -1,12 +1,25 @@
 "use client";
 
-import { Copy, FolderPlus } from "lucide-react";
+import { Copy, FolderPlus, Sparkles } from "lucide-react";
 import { Button, Modal, Space, Tag } from "antd";
+import { useRouter } from "next/navigation";
 
+import { saveImageWorkbenchPreset } from "@/lib/image-workbench-preset";
 import { formatPromptDate, type Prompt } from "@/services/api/prompts";
 import { promptImageUrl, usePromptFallbackImage } from "./prompt-image";
 
 export function PromptDetailDialog({ prompt, onClose, onCopy, onSaveAsset }: { prompt: Prompt | null; onClose: () => void; onCopy: (prompt: string) => void; onSaveAsset?: (prompt: Prompt) => void }) {
+    const router = useRouter();
+    const tryPrompt = () => {
+        if (!prompt) return;
+        const params = new URLSearchParams();
+        const context = [prompt.category, ...prompt.tags, prompt.title].filter(Boolean).join(" ");
+        if (saveImageWorkbenchPreset({ prompt: prompt.prompt, context })) params.set("preset", "prompt-library");
+        else params.set("prompt", prompt.prompt);
+        router.push(`/image?${params.toString()}`);
+        onClose();
+    };
+
     return (
         <>
             <Modal title={prompt?.title} open={Boolean(prompt)} onCancel={onClose} footer={null} width={860}>
@@ -30,7 +43,10 @@ export function PromptDetailDialog({ prompt, onClose, onCopy, onSaveAsset }: { p
                                     创建：{formatPromptDate(prompt.createdAt)} · 更新：{formatPromptDate(prompt.updatedAt)}
                                 </div>
                                 <Space wrap className="mt-5">
-                                    <Button type="primary" icon={<Copy className="size-4" />} onClick={() => onCopy(prompt.prompt)}>
+                                    <Button type="primary" icon={<Sparkles className="size-4" />} onClick={tryPrompt}>
+                                        去试试
+                                    </Button>
+                                    <Button icon={<Copy className="size-4" />} onClick={() => onCopy(prompt.prompt)}>
                                         复制提示词
                                     </Button>
                                     {onSaveAsset ? (

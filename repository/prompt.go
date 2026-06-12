@@ -76,7 +76,7 @@ func ListPrompts(q model.Query) ([]model.Prompt, int64, error) {
 	}
 
 	var items []model.Prompt
-	if err := tx.Order("updated_at desc").Offset(q.Offset()).Limit(q.PageSize).Find(&items).Error; err != nil {
+	if err := tx.Order("CASE WHEN cover_url <> '' THEN 0 ELSE 1 END, updated_at desc").Offset(q.Offset()).Limit(q.PageSize).Find(&items).Error; err != nil {
 		return nil, 0, err
 	}
 	categories, _ := ListPromptCategories()

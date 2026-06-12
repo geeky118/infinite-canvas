@@ -32,7 +32,7 @@ func GetUserData(userID string, domain string) (UserDataPayload, error) {
 	if !ok {
 		return UserDataPayload{Domain: domain, Payload: json.RawMessage("null")}, nil
 	}
-	return UserDataPayload{Domain: data.Domain, Payload: json.RawMessage(data.Payload), UpdatedAt: data.UpdatedAt}, nil
+	return UserDataPayload{Domain: data.Domain, Payload: json.RawMessage(string(data.Payload)), UpdatedAt: data.UpdatedAt}, nil
 }
 
 func SaveUserData(userID string, domain string, payload json.RawMessage) (UserDataPayload, error) {
@@ -56,13 +56,13 @@ func SaveUserData(userID string, domain string, payload json.RawMessage) (UserDa
 			CreatedAt: timestamp,
 		}
 	}
-	saved.Payload = string(payload)
+	saved.Payload = model.LargeText(string(payload))
 	saved.UpdatedAt = timestamp
 	saved, err = repository.SaveUserData(saved)
 	if err != nil {
 		return UserDataPayload{}, err
 	}
-	return UserDataPayload{Domain: saved.Domain, Payload: json.RawMessage(saved.Payload), UpdatedAt: saved.UpdatedAt}, nil
+	return UserDataPayload{Domain: saved.Domain, Payload: json.RawMessage(string(saved.Payload)), UpdatedAt: saved.UpdatedAt}, nil
 }
 
 func normalizeUserDataDomain(domain string) (string, error) {

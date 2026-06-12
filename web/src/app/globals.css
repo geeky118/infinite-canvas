@@ -328,14 +328,13 @@
         container-type: inline-size;
     }
 
-    .canvas-composer-mode-button {
-        width: 32px;
-    }
-
-    .canvas-composer-tools .canvas-composer-mode-button span,
     .canvas-composer-tools .canvas-model-picker-text,
     .canvas-composer-tools .canvas-select-chevron,
     .canvas-composer-tools .canvas-composer-icon.ant-btn > span:not(.ant-btn-icon) {
+        display: none;
+    }
+
+    .canvas-composer-tools .canvas-composer-icon.ant-btn.canvas-composer-icon-only > span:not(.ant-btn-icon) {
         display: none;
     }
 
@@ -347,27 +346,33 @@
         padding-inline: 0;
     }
 
+    .canvas-composer-tools .canvas-composer-model-picker.canvas-composer-icon-only {
+        width: 32px;
+        min-width: 32px;
+        justify-content: center;
+        gap: 0;
+        padding-inline: 0;
+    }
+
     @container (min-width: 440px) {
-        .canvas-composer-mode-button {
-            padding-inline: 8px;
-            width: auto;
-        }
-
-        .canvas-composer-tools .canvas-composer-mode-button span {
-            display: inline;
-            font-size: 12px;
-            line-height: 1;
-        }
-
         .canvas-composer-icon.ant-btn {
             flex: 0 1 auto;
             max-width: 170px;
             width: auto !important;
         }
 
+        .canvas-composer-icon.ant-btn.canvas-composer-icon-only {
+            flex: 0 0 32px;
+            width: 32px !important;
+        }
+
         .canvas-composer-tools .canvas-composer-icon.ant-btn > span:not(.ant-btn-icon) {
             display: inline-flex;
             min-width: 0;
+        }
+
+        .canvas-composer-tools .canvas-composer-icon.ant-btn.canvas-composer-icon-only > span:not(.ant-btn-icon) {
+            display: none;
         }
 
         .canvas-composer-tools .canvas-composer-model-picker {
@@ -376,6 +381,14 @@
             justify-content: flex-start;
             gap: 0.5rem;
             padding-inline: 0.75rem;
+        }
+
+        .canvas-composer-tools .canvas-composer-model-picker.canvas-composer-icon-only {
+            width: 32px;
+            min-width: 32px;
+            justify-content: center;
+            gap: 0;
+            padding-inline: 0;
         }
 
         .canvas-composer-tools .canvas-model-picker-text,

@@ -21,6 +21,9 @@ description: 当前后端主要数据表与字段说明
 
 - `users`
 - `credit_logs`
+- `subscription_plans`
+- `redemption_codes`
+- `daily_reward_claims`
 - `user_data`
 - `prompts`
 - `assets`
@@ -42,6 +45,9 @@ description: 当前后端主要数据表与字段说明
 | `avatar_url` | string | 头像地址 |
 | `role` | string | 角色：`user`、`admin` |
 | `credits` | number | 算力点余额 |
+| `subscription_id` | string | 当前订阅方案 ID |
+| `subscription_name` | string | 当前订阅方案名称 |
+| `subscription_expire_at` | string | 当前订阅到期时间 |
 | `aff_code` | string | 用户自己的邀请码，唯一索引 |
 | `aff_count` | number | 已邀请用户数量，冗余统计字段 |
 | `inviter_id` | string | 邀请人用户 ID |
@@ -112,6 +118,7 @@ description: 当前后端主要数据表与字段说明
 | --- | --- | --- |
 | `modelChannel` | object | 模型渠道公开配置组 |
 | `auth` | object | 公开登录配置 |
+| `marketing` | object | 公开营销奖励配置 |
 
 `modelChannel` 当前字段：
 
@@ -138,6 +145,13 @@ description: 当前后端主要数据表与字段说明
 | 字段 | 类型 | 说明 |
 | --- | --- | --- |
 | `enabled` | bool | 是否开启 Linux.do 登录 |
+
+`marketing` 当前字段：
+
+| 字段 | 类型 | 说明 |
+| --- | --- | --- |
+| `registerCredits` | number | 新注册用户获得的算力点 |
+| `dailyCredits` | number | 登录用户每日可领取的算力点 |
 
 `private.value` 当前字段：
 
@@ -178,13 +192,13 @@ description: 当前后端主要数据表与字段说明
 
 ### credit_logs
 
-用户算力点变更流水表。当前记录后台手动调整、模型调用预扣和模型调用失败返还。
+用户算力点变更流水表。当前记录后台手动调整、模型调用预扣、模型调用失败返还、注册奖励、每日领取和兑换码兑换。
 
 | 字段 | 类型 | 说明 |
 | --- | --- | --- |
 | `id` | string | 主键 |
 | `user_id` | string | 关联用户 ID |
-| `type` | string | 类型：`admin_adjust`、`ai_consume`、`ai_refund` |
+| `type` | string | 类型：`admin_adjust`、`ai_consume`、`ai_refund`、`register_reward`、`daily_reward`、`redeem_code` |
 | `amount` | number | 本次变动数量，增加为正，扣减为负 |
 | `balance` | number | 变动后的用户算力点余额 |
 | `related_id` | string | 关联业务 ID，可为空 |
@@ -199,16 +213,65 @@ description: 当前后端主要数据表与字段说明
 | `admin_adjust` | 后台手动调整 |
 | `ai_consume` | 调用后端模型接口消费 |
 | `ai_refund` | 后端模型接口调用失败返还 |
+| `register_reward` | 新用户注册奖励 |
+| `daily_reward` | 每日领取奖励 |
+| `redeem_code` | 兑换码兑换点数 |
+
+### subscription_plans
+
+后台订阅方案表，用于生成订阅兑换码。
+
+| 字段 | 类型 | 说明 |
+| --- | --- | --- |
+| `id` | string | 主键 |
+| `name` | string | 订阅名称 |
+| `description` | text | 说明 |
+| `duration_days` | number | 兑换后增加的有效天数 |
+| `enabled` | bool | 是否启用 |
+| `created_at` | string | 创建时间 |
+| `updated_at` | string | 更新时间 |
+
+### redemption_codes
+
+后台批量生成、用户一次性兑换的兑换码表。
+
+| 字段 | 类型 | 说明 |
+| --- | --- | --- |
+| `id` | string | 主键 |
+| `code` | string | 兑换码，唯一索引 |
+| `batch_id` | string | 生成批次 ID |
+| `type` | string | 类型：`credits`、`subscription` |
+| `credits` | number | 点数兑换码的点数数量 |
+| `subscription_id` | string | 订阅兑换码关联的订阅方案 ID |
+| `subscription_name` | string | 生成时记录的订阅名称 |
+| `subscription_duration_days` | number | 生成时记录的订阅有效天数 |
+| `used` | bool | 是否已使用 |
+| `used_by` | string | 使用用户 ID |
+| `used_at` | string | 使用时间 |
+| `created_at` | string | 创建时间 |
+| `updated_at` | string | 更新时间 |
+
+### daily_reward_claims
+
+用户每日领取记录表，用用户 ID 和日期做唯一约束，避免同一天重复领取。
+
+| 字段 | 类型 | 说明 |
+| --- | --- | --- |
+| `id` | string | 主键 |
+| `user_id` | string | 用户 ID |
+| `date` | string | 领取日期，格式 `YYYY-MM-DD` |
+| `credits` | number | 本次领取点数 |
+| `created_at` | string | 创建时间 |
 
 ### user_data
 
-登录用户跨设备数据表。当前用于保存用户画布项目、模型配置和“我的素材”，未登录用户仍使用浏览器本地存储。画布助手会话和结构化会话记忆随 `canvas` 域内的画布项目 JSON 一起保存。提示词中心内容保存在 `prompts` 表；用户加入“我的素材”的提示词会作为文本素材随 `assets` 域同步。
+登录用户跨设备数据表。当前用于保存用户画布项目、模型配置和“我的素材”，未登录用户仍使用浏览器本地存储。`canvas` 域的 `payload` 保存完整 `{ projects }`，每个画布项目内包含 `nodes`、`connections`、`chatSessions`、`activeChatId`、`systemPrompt`、视口和外观设置。画布助手会话和结构化会话记忆随 `chatSessions` 一起保存。提示词中心内容保存在 `prompts` 表；用户加入“我的素材”的提示词会作为文本素材随 `assets` 域同步。`payload` 在 MySQL 下使用 `LONGTEXT`，用于承载较大的画布项目 JSON。
 
 | 字段 | 类型 | 说明 |
 | --- | --- | --- |
 | `id` | string | 主键 |
 | `user_id` | string | 用户 ID，与 `domain` 组成唯一索引 |
 | `domain` | string | 数据域，当前支持 `canvas`、`ai-config`、`assets` |
-| `payload` | json | 数据内容 |
+| `payload` | json text | 数据内容；MySQL 下为 `LONGTEXT` |
 | `created_at` | string | 创建时间 |
 | `updated_at` | string | 更新时间 |

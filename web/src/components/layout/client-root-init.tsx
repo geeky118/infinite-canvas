@@ -30,7 +30,7 @@ type CloudSaveTask = {
     lastPayload: string;
 };
 
-const CLOUD_CANVAS_SAVE_DELAY_MS = 6000;
+const CLOUD_CANVAS_SAVE_DELAY_MS = 2000;
 const CLOUD_CONFIG_SAVE_DELAY_MS = 1500;
 const CLOUD_ASSETS_SAVE_DELAY_MS = 3000;
 
@@ -48,6 +48,7 @@ export function ClientRootInit({ children }: { children: ReactNode }) {
     const updateConfig = useConfigStore((state) => state.updateConfig);
     const replaceConfig = useConfigStore((state) => state.replaceConfig);
     const replaceProjects = useCanvasStore((state) => state.replaceProjects);
+    const setCanvasCloudHydrated = useCanvasStore((state) => state.setCloudHydrated);
     const replaceAssets = useAssetStore((state) => state.replaceAssets);
     const openConfigDialog = useConfigStore((state) => state.openConfigDialog);
     const isLoginPage = pathname === "/login" || pathname === "/admin/login";
@@ -63,6 +64,7 @@ export function ClientRootInit({ children }: { children: ReactNode }) {
     useEffect(() => {
         let cancelled = false;
         cloudSyncReady.current = { canvas: false, config: false, assets: false };
+        setCanvasCloudHydrated(!token);
         if (!token || !userId) return;
 
         async function loadCloudData() {
@@ -75,11 +77,15 @@ export function ClientRootInit({ children }: { children: ReactNode }) {
                 void saveUserData(token, "canvas", { projects: useCanvasStore.getState().projects });
             }
             cloudSyncReady.current.canvas = canvasResult.status === "fulfilled";
+            setCanvasCloudHydrated(true);
 
             if (configResult.status === "fulfilled" && configResult.value.payload?.config) {
                 replaceConfig(configResult.value.payload.config);
             } else if (configResult.status === "fulfilled") {
-                void saveUserData(token, "ai-config", { config: useConfigStore.getState().config });
+                const currentConfig = useConfigStore.getState().config;
+                const initialConfig = { ...currentConfig, channelMode: "remote" as const };
+                replaceConfig(initialConfig);
+                void saveUserData(token, "ai-config", { config: initialConfig });
             }
             cloudSyncReady.current.config = configResult.status === "fulfilled";
 
@@ -95,8 +101,9 @@ export function ClientRootInit({ children }: { children: ReactNode }) {
         return () => {
             cancelled = true;
             cloudSyncReady.current = { canvas: false, config: false, assets: false };
+            setCanvasCloudHydrated(false);
         };
-    }, [replaceAssets, replaceConfig, replaceProjects, token, userId]);
+    }, [replaceAssets, replaceConfig, replaceProjects, setCanvasCloudHydrated, token, userId]);
 
     useEffect(() => {
         if (!token || !userId) return;
@@ -115,7 +122,20 @@ export function ClientRootInit({ children }: { children: ReactNode }) {
             if (!cloudSyncReady.current.assets || state.assets === previous.assets) return;
             scheduleCloudSave(assetsTask, CLOUD_ASSETS_SAVE_DELAY_MS, () => ({ assets: useAssetStore.getState().assets }), (payload) => saveUserData(token, "assets", payload));
         });
+        const flushPendingSaves = () => {
+            void flushCloudSaveNow(canvasTask, CLOUD_CANVAS_SAVE_DELAY_MS, () => ({ projects: useCanvasStore.getState().projects }), (payload) => saveUserData(token, "canvas", payload));
+            void flushCloudSaveNow(configTask, CLOUD_CONFIG_SAVE_DELAY_MS, () => ({ config: useConfigStore.getState().config }), (payload) => saveUserData(token, "ai-config", payload));
+            void flushCloudSaveNow(assetsTask, CLOUD_ASSETS_SAVE_DELAY_MS, () => ({ assets: useAssetStore.getState().assets }), (payload) => saveUserData(token, "assets", payload));
+        };
+        const handleVisibilityChange = () => {
+            if (document.visibilityState === "hidden") flushPendingSaves();
+        };
+        window.addEventListener("pagehide", flushPendingSaves);
+        document.addEventListener("visibilitychange", handleVisibilityChange);
         return () => {
+            flushPendingSaves();
+            window.removeEventListener("pagehide", flushPendingSaves);
+            document.removeEventListener("visibilitychange", handleVisibilityChange);
             unsubscribeCanvas();
             unsubscribeConfig();
             unsubscribeAssets();
@@ -182,6 +202,13 @@ function scheduleCloudSave<T>(task: CloudSaveTask, delay: number, readPayload: (
         task.timer = null;
         void flushCloudSave(task, delay, readPayload, save);
     }, delay);
+}
+
+async function flushCloudSaveNow<T>(task: CloudSaveTask, delay: number, readPayload: () => T, save: (payload: T) => Promise<unknown>) {
+    if (!task.pending) return;
+    if (task.timer) clearTimeout(task.timer);
+    task.timer = null;
+    await flushCloudSave(task, delay, readPayload, save);
 }
 
 async function flushCloudSave<T>(task: CloudSaveTask, delay: number, readPayload: () => T, save: (payload: T) => Promise<unknown>) {

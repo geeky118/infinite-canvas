@@ -7,6 +7,7 @@ import { Button, Input } from "antd";
 import { useCanvasStore, type CanvasProject } from "../stores/use-canvas-store";
 import { useCanvasUiStore } from "../stores/use-canvas-ui-store";
 import { exportCanvasProjects } from "../utils/canvas-export";
+import { canvasTextSelectionStyle, copySelectedTextFromTextControl } from "../utils/canvas-text-clipboard";
 
 export function CanvasProjectCard({ project }: { project: CanvasProject }) {
     const router = useRouter();
@@ -39,7 +40,7 @@ export function CanvasProjectCard({ project }: { project: CanvasProject }) {
                     aria-label={`选择 ${project.title}`}
                 />
                 {editing ? (
-                    <Input className="min-w-0" value={editingTitle} onClick={(event) => event.stopPropagation()} onChange={(event) => setEditingTitle(event.target.value)} onKeyDown={(event) => event.key === "Enter" && saveTitle()} autoFocus />
+                    <Input className="min-w-0" style={canvasTextSelectionStyle} value={editingTitle} onClick={(event) => event.stopPropagation()} onChange={(event) => setEditingTitle(event.target.value)} onKeyDown={(event) => event.key === "Enter" && saveTitle()} onCopy={copySelectedTextFromTextControl} autoFocus />
                 ) : (
                     <button
                         type="button"

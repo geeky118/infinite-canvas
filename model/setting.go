@@ -43,6 +43,12 @@ type PublicModelChannelSetting struct {
 type PublicSetting struct {
 	ModelChannel PublicModelChannelSetting `json:"modelChannel"`
 	Auth         PublicAuthSetting         `json:"auth"`
+	Marketing    PublicMarketingSetting    `json:"marketing"`
+}
+
+type PublicMarketingSetting struct {
+	RegisterCredits int `json:"registerCredits"`
+	DailyCredits    int `json:"dailyCredits"`
 }
 
 type PublicAuthSetting struct {

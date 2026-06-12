@@ -5,6 +5,7 @@ import { Button, Input, Modal, Slider } from "antd";
 import { Brush, Eraser, RotateCcw, WandSparkles, X } from "lucide-react";
 
 import { readImageMeta } from "@/lib/image-utils";
+import { canvasTextSelectionStyle, copySelectedTextFromTextControl } from "../utils/canvas-text-clipboard";
 
 export type CanvasImageMaskEditPayload = {
     prompt: string;
@@ -153,11 +154,13 @@ export function CanvasNodeMaskEditDialog({ dataUrl, open, onClose, onConfirm }: 
                             rows={6}
                             value={prompt}
                             status={error && !prompt.trim() ? "error" : undefined}
+                            style={canvasTextSelectionStyle}
                             placeholder="例如：把选中区域改成金属材质，保持原图光影"
                             onChange={(event) => {
                                 setPrompt(event.target.value);
                                 setError("");
                             }}
+                            onCopy={copySelectedTextFromTextControl}
                         />
                         {error ? <div className="text-xs font-medium text-[#ef4444]">{error}</div> : null}
                     </div>

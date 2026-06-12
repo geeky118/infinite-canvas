@@ -1,5 +1,10 @@
 package model
 
+import (
+	"gorm.io/gorm"
+	"gorm.io/gorm/schema"
+)
+
 type UserRole string
 
 const (
@@ -15,27 +20,43 @@ const (
 	UserStatusBan    UserStatus = "ban"
 )
 
+type LargeText string
+
+func (LargeText) GormDataType() string {
+	return "text"
+}
+
+func (LargeText) GormDBDataType(db *gorm.DB, _ *schema.Field) string {
+	if db.Dialector.Name() == "mysql" {
+		return "longtext"
+	}
+	return "text"
+}
+
 // User 系统用户。
 type User struct {
-	ID          string     `json:"id" gorm:"primaryKey"`
-	Username    string     `json:"username" gorm:"uniqueIndex"`
-	Password    string     `json:"password,omitempty"`
-	Email       string     `json:"email"`
-	DisplayName string     `json:"displayName"`
-	AvatarURL   string     `json:"avatarUrl"`
-	Role        UserRole   `json:"role"`
-	Credits     int        `json:"credits"`
-	AffCode     string     `json:"affCode" gorm:"uniqueIndex"`
-	AffCount    int        `json:"affCount"`
-	InviterID   string     `json:"inviterId"`
-	GithubID    string     `json:"githubId"`
-	LinuxDoID   string     `json:"linuxDoId" gorm:"index"`
-	WechatID    string     `json:"wechatId"`
-	Status      UserStatus `json:"status"`
-	LastLoginAt string     `json:"lastLoginAt"`
-	Extra       string     `json:"extra" gorm:"type:text"`
-	CreatedAt   string     `json:"createdAt"`
-	UpdatedAt   string     `json:"updatedAt"`
+	ID                   string     `json:"id" gorm:"primaryKey"`
+	Username             string     `json:"username" gorm:"uniqueIndex"`
+	Password             string     `json:"password,omitempty"`
+	Email                string     `json:"email"`
+	DisplayName          string     `json:"displayName"`
+	AvatarURL            string     `json:"avatarUrl"`
+	Role                 UserRole   `json:"role"`
+	Credits              int        `json:"credits"`
+	SubscriptionID       string     `json:"subscriptionId"`
+	SubscriptionName     string     `json:"subscriptionName"`
+	SubscriptionExpireAt string     `json:"subscriptionExpireAt"`
+	AffCode              string     `json:"affCode" gorm:"uniqueIndex"`
+	AffCount             int        `json:"affCount"`
+	InviterID            string     `json:"inviterId"`
+	GithubID             string     `json:"githubId"`
+	LinuxDoID            string     `json:"linuxDoId" gorm:"index"`
+	WechatID             string     `json:"wechatId"`
+	Status               UserStatus `json:"status"`
+	LastLoginAt          string     `json:"lastLoginAt"`
+	Extra                string     `json:"extra" gorm:"type:text"`
+	CreatedAt            string     `json:"createdAt"`
+	UpdatedAt            string     `json:"updatedAt"`
 }
 
 // UserList 用户分页结果。
@@ -46,14 +67,17 @@ type UserList struct {
 
 // AuthUser 用户公开信息。
 type AuthUser struct {
-	ID          string   `json:"id"`
-	Username    string   `json:"username"`
-	DisplayName string   `json:"displayName"`
-	AvatarURL   string   `json:"avatarUrl"`
-	Role        UserRole `json:"role"`
-	Credits     int      `json:"credits"`
-	CreatedAt   string   `json:"createdAt"`
-	UpdatedAt   string   `json:"updatedAt"`
+	ID                   string   `json:"id"`
+	Username             string   `json:"username"`
+	DisplayName          string   `json:"displayName"`
+	AvatarURL            string   `json:"avatarUrl"`
+	Role                 UserRole `json:"role"`
+	Credits              int      `json:"credits"`
+	SubscriptionID       string   `json:"subscriptionId"`
+	SubscriptionName     string   `json:"subscriptionName"`
+	SubscriptionExpireAt string   `json:"subscriptionExpireAt"`
+	CreatedAt            string   `json:"createdAt"`
+	UpdatedAt            string   `json:"updatedAt"`
 }
 
 // AuthSession 登录会话信息。
@@ -64,14 +88,17 @@ type AuthSession struct {
 
 func PublicUser(user User) AuthUser {
 	return AuthUser{
-		ID:          user.ID,
-		Username:    user.Username,
-		DisplayName: user.DisplayName,
-		AvatarURL:   user.AvatarURL,
-		Role:        user.Role,
-		Credits:     user.Credits,
-		CreatedAt:   user.CreatedAt,
-		UpdatedAt:   user.UpdatedAt,
+		ID:                   user.ID,
+		Username:             user.Username,
+		DisplayName:          user.DisplayName,
+		AvatarURL:            user.AvatarURL,
+		Role:                 user.Role,
+		Credits:              user.Credits,
+		SubscriptionID:       user.SubscriptionID,
+		SubscriptionName:     user.SubscriptionName,
+		SubscriptionExpireAt: user.SubscriptionExpireAt,
+		CreatedAt:            user.CreatedAt,
+		UpdatedAt:            user.UpdatedAt,
 	}
 }
 
@@ -81,6 +108,9 @@ const (
 	CreditLogTypeAdminAdjust CreditLogType = "admin_adjust"
 	CreditLogTypeAIConsume   CreditLogType = "ai_consume"
 	CreditLogTypeAIRefund    CreditLogType = "ai_refund"
+	CreditLogTypeRegister    CreditLogType = "register_reward"
+	CreditLogTypeDailyReward CreditLogType = "daily_reward"
+	CreditLogTypeRedeemCode  CreditLogType = "redeem_code"
 )
 
 // CreditLog 用户算力点变更流水。
@@ -106,7 +136,7 @@ type UserData struct {
 	ID        string `json:"id" gorm:"primaryKey"`
 	UserID    string `json:"userId" gorm:"uniqueIndex:idx_user_data_domain"`
 	Domain    string `json:"domain" gorm:"uniqueIndex:idx_user_data_domain;size:64"`
-	Payload   string `json:"payload" gorm:"type:text"`
+	Payload   LargeText `json:"payload"`
 	CreatedAt string `json:"createdAt"`
 	UpdatedAt string `json:"updatedAt"`
 }

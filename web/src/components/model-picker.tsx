@@ -14,11 +14,12 @@ type ModelPickerProps = {
     capability?: ModelCapability;
     className?: string;
     fullWidth?: boolean;
+    iconOnly?: boolean;
     placeholder?: string;
     onMissingConfig?: () => void;
 };
 
-export function ModelPicker({ config, value, onChange, capability, className, fullWidth = false, placeholder = "选择模型", onMissingConfig }: ModelPickerProps) {
+export function ModelPicker({ config, value, onChange, capability, className, fullWidth = false, iconOnly = false, placeholder = "选择模型", onMissingConfig }: ModelPickerProps) {
     const pickerId = useId();
     const [open, setOpen] = useState(false);
     const options = useMemo(() => {
@@ -49,16 +50,18 @@ export function ModelPicker({ config, value, onChange, capability, className, fu
             <SelectTrigger
                 className={cn(
                     "canvas-composer-model-picker h-8 w-fit max-w-full gap-2 rounded-full border border-input bg-transparent px-3 text-sm font-normal shadow-sm transition-colors",
-                    fullWidth ? "w-full min-w-0 justify-start" : "min-w-[9rem] justify-start",
+                    iconOnly ? "w-8 min-w-8 justify-center gap-0 px-0" : fullWidth ? "w-full min-w-0 justify-start" : "min-w-[9rem] justify-start",
                     "data-[state=open]:border-ring data-[state=open]:ring-2 data-[state=open]:ring-ring/20",
                     className,
                 )}
                 onMouseDown={(event) => event.stopPropagation()}
                 onPointerDown={(event) => event.stopPropagation()}
                 title={current || placeholder}
+                aria-label={iconOnly ? placeholder : undefined}
+                hideChevron={iconOnly}
             >
                 <ModelIcon model={current} />
-                <span className="canvas-model-picker-text min-w-0 flex-1 truncate text-left">{current || placeholder}</span>
+                {iconOnly ? null : <span className="canvas-model-picker-text min-w-0 flex-1 truncate text-left">{current || placeholder}</span>}
             </SelectTrigger>
             <SelectContent
                 data-canvas-no-zoom

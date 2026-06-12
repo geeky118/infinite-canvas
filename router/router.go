@@ -35,12 +35,16 @@ func New() *gin.Engine {
 	v1.POST("/audio/speech", gin.WrapF(handler.AIAudioSpeech))
 	v1.POST("/videos", gin.WrapF(handler.AIVideos))
 	v1.POST("/media/references", gin.WrapF(handler.UploadReferenceMedia))
+	v1.POST("/media/images", gin.WrapF(handler.UploadCanvasImage))
 	v1.GET("/user-data/:domain", func(c *gin.Context) {
 		handler.UserData(c.Writer, c.Request, c.Param("domain"))
 	})
 	v1.POST("/user-data/:domain", func(c *gin.Context) {
 		handler.SaveUserData(c.Writer, c.Request, c.Param("domain"))
 	})
+	v1.GET("/marketing/status", gin.WrapF(handler.MarketingStatus))
+	v1.POST("/marketing/daily-credits", gin.WrapF(handler.ClaimDailyCredits))
+	v1.POST("/marketing/redeem", gin.WrapF(handler.RedeemMarketingCode))
 	v1.GET("/videos/:id", func(c *gin.Context) {
 		handler.AIVideo(c.Writer, c.Request, c.Param("id"))
 	})
@@ -65,6 +69,15 @@ func New() *gin.Engine {
 	admin.DELETE("/credit-logs/:id", func(c *gin.Context) {
 		handler.AdminDeleteCreditLog(c.Writer, c.Request, c.Param("id"))
 	})
+	admin.GET("/marketing/settings", gin.WrapF(handler.AdminMarketingSettings))
+	admin.POST("/marketing/settings", gin.WrapF(handler.AdminSaveMarketingSettings))
+	admin.GET("/marketing/subscriptions", gin.WrapF(handler.AdminSubscriptionPlans))
+	admin.POST("/marketing/subscriptions", gin.WrapF(handler.AdminSaveSubscriptionPlan))
+	admin.DELETE("/marketing/subscriptions/:id", func(c *gin.Context) {
+		handler.AdminDeleteSubscriptionPlan(c.Writer, c.Request, c.Param("id"))
+	})
+	admin.GET("/marketing/redemption-codes", gin.WrapF(handler.AdminRedemptionCodes))
+	admin.POST("/marketing/redemption-codes/generate", gin.WrapF(handler.AdminGenerateRedemptionCodes))
 	admin.GET("/settings", gin.WrapF(handler.AdminSettings))
 	admin.POST("/settings", gin.WrapF(handler.AdminSaveSettings))
 	admin.POST("/settings/channel-models", gin.WrapF(handler.AdminChannelModels))

@@ -2,11 +2,14 @@
 
 import { ArrowRight } from "lucide-react";
 import { type ReactNode, useEffect, useState } from "react";
-import { App, Button, Image, Tag } from "antd";
+import { App, Button, Tag } from "antd";
 
+import { PromptDetailDialog } from "@/components/prompts/prompt-detail-dialog";
 import { fetchPrompts, type Prompt } from "@/services/api/prompts";
 import { navigationTools } from "@/constant/navigation-tools";
+import { useCopyText } from "@/hooks/use-copy-text";
 import { cn } from "@/lib/utils";
+import { promptImageUrl, usePromptFallbackImage } from "@/components/prompts/prompt-image";
 
 function Highlighter({ action, color, children }: { action: "highlight" | "underline"; color: string; children: ReactNode }) {
     return (
@@ -25,12 +28,12 @@ export default function IndexPage() {
     const { message } = App.useApp();
     const [primaryTool] = navigationTools;
     const [promptShowcase, setPromptShowcase] = useState<Prompt[]>([]);
-    const [previewIndex, setPreviewIndex] = useState(0);
-    const [previewOpen, setPreviewOpen] = useState(false);
+    const [selectedPrompt, setSelectedPrompt] = useState<Prompt | null>(null);
+    const copyText = useCopyText();
 
     useEffect(() => {
         void fetchPrompts({ pageSize: 12 })
-            .then((data) => setPromptShowcase(data.items))
+            .then((data) => setPromptShowcase(sortPromptsWithImagesFirst(data.items)))
             .catch((error) => message.error(error instanceof Error ? error.message : "获取提示词失败"));
     }, [message]);
 
@@ -79,17 +82,14 @@ export default function IndexPage() {
                             <button
                                 key={item.id}
                                 type="button"
-                                onClick={() => {
-                                    setPreviewIndex(index);
-                                    setPreviewOpen(true);
-                                }}
+                                onClick={() => setSelectedPrompt(item)}
                                 className={cn(
                                     "group relative cursor-pointer overflow-hidden border border-stone-200 bg-stone-100 text-left dark:border-stone-800 dark:bg-stone-900",
                                     index === 0 && "md:col-span-2 md:row-span-2",
                                     index === 3 && "md:col-span-2",
                                 )}
                             >
-                                <img src={item.coverUrl} alt={item.title} className="h-full w-full object-cover transition duration-500 group-hover:scale-[1.03]" />
+                                <img src={promptImageUrl(item.coverUrl)} alt={item.title} className="h-full w-full object-cover transition duration-500 group-hover:scale-[1.03]" onError={usePromptFallbackImage} />
                                 <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/70 via-black/35 to-transparent p-4 text-white">
                                     <div className="mb-2 flex flex-wrap gap-1.5">
                                         {item.tags.slice(0, 2).map((tag) => (
@@ -106,20 +106,15 @@ export default function IndexPage() {
                     </div>
                 </section>
             </section>
-            <Image.PreviewGroup
-                preview={{
-                    open: previewOpen,
-                    current: previewIndex,
-                    onOpenChange: setPreviewOpen,
-                    onChange: setPreviewIndex,
-                }}
-            >
-                <div className="hidden">
-                    {promptShowcase.map((item) => (
-                        <Image key={item.id} src={item.coverUrl} alt={item.title} />
-                    ))}
-                </div>
-            </Image.PreviewGroup>
+            <PromptDetailDialog prompt={selectedPrompt} onClose={() => setSelectedPrompt(null)} onCopy={(prompt) => copyText(prompt, "提示词已复制")} />
         </main>
     );
+}
+
+function sortPromptsWithImagesFirst(items: Prompt[]) {
+    return [...items].sort((a, b) => Number(hasPromptImage(b)) - Number(hasPromptImage(a)));
+}
+
+function hasPromptImage(item: Prompt) {
+    return Boolean(item.coverUrl.trim() || item.preview.includes("![](") || item.preview.includes("!["));
 }

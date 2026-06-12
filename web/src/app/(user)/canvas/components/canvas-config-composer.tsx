@@ -7,6 +7,7 @@ import { FileText, Image as ImageIcon, Music2, Video, X } from "lucide-react";
 
 import { canvasThemes } from "@/lib/canvas-theme";
 import { useThemeStore } from "@/stores/use-theme-store";
+import { canvasTextSelectionStyle, copySelectedTextFromContentEditable } from "../utils/canvas-text-clipboard";
 import type { NodeGenerationInput } from "./canvas-node-generation";
 
 type CanvasConfigComposerProps = {
@@ -128,8 +129,10 @@ export function CanvasConfigComposer({ value, inputs, onChange, onClose }: Canva
                     ref={editorRef}
                     contentEditable
                     suppressContentEditableWarning
-                    className="thin-scrollbar min-h-28 w-full overflow-y-auto whitespace-pre-wrap break-words px-3 py-2 text-sm leading-7 outline-none"
-                    style={{ color: theme.node.text }}
+                    className="thin-scrollbar min-h-28 w-full select-text overflow-y-auto whitespace-pre-wrap break-words px-3 py-2 text-sm leading-7 outline-none"
+                    style={{ color: theme.node.text, caretColor: theme.node.activeStroke, ...canvasTextSelectionStyle }}
+                    onMouseDown={(event) => event.stopPropagation()}
+                    onPointerDown={(event) => event.stopPropagation()}
                     onInput={() => {
                         if (!composingRef.current) syncFromEditor();
                     }}
@@ -171,6 +174,9 @@ export function CanvasConfigComposer({ value, inputs, onChange, onClose }: Canva
                         }
                         requestAnimationFrame(syncMention);
                     }}
+                    onCopy={(event) => copySelectedTextFromContentEditable(event, editorRef.current)}
+                    onCut={(event) => event.stopPropagation()}
+                    onPaste={(event) => event.stopPropagation()}
                     onBlur={() => window.setTimeout(closeMention, 120)}
                 />
                 {mention && candidates.length ? <MentionMenu inputs={candidates} allInputs={inputs} activeIndex={Math.min(activeIndex, candidates.length - 1)} theme={theme} onSelect={insertReference} /> : null}

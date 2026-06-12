@@ -93,6 +93,12 @@ func normalizePublicSettingWithChannels(setting model.PublicSetting, channels []
 		enabled := true
 		setting.Auth.AllowRegister = &enabled
 	}
+	if setting.Marketing.RegisterCredits < 0 {
+		setting.Marketing.RegisterCredits = 0
+	}
+	if setting.Marketing.DailyCredits < 0 {
+		setting.Marketing.DailyCredits = 0
+	}
 	enabledModels := enabledChannelModels(channels)
 	if len(enabledModels) > 0 {
 		setting.ModelChannel.AvailableModels = enabledModels

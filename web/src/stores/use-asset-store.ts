@@ -10,7 +10,7 @@ import { cleanupUnusedMedia, resolveMediaUrl } from "@/services/file-storage";
 
 export type AssetKind = "text" | "image" | "video";
 export type TextAsset = AssetBase<"text"> & { data: { content: string } };
-export type ImageAsset = AssetBase<"image"> & { data: { dataUrl: string; storageKey?: string; width: number; height: number; bytes: number; mimeType: string } };
+export type ImageAsset = AssetBase<"image"> & { data: { dataUrl: string; storageKey?: string; remoteUrl?: string; width: number; height: number; bytes: number; mimeType: string } };
 export type VideoAsset = AssetBase<"video"> & { data: { url: string; storageKey?: string; width: number; height: number; bytes: number; mimeType: string } };
 export type Asset = TextAsset | ImageAsset | VideoAsset;
 
@@ -51,12 +51,12 @@ const assetStorage: PersistStorage<AssetStore> = {
                 if (asset.data.storageKey)
                     return {
                         ...asset,
-                        coverUrl: asset.coverUrl.startsWith("blob:") ? await resolveImageUrl(asset.data.storageKey, asset.coverUrl) : asset.coverUrl,
-                        data: { ...asset.data, dataUrl: await resolveImageUrl(asset.data.storageKey, asset.data.dataUrl) },
+                        coverUrl: asset.coverUrl.startsWith("blob:") ? await resolveImageUrl(asset.data.storageKey, asset.coverUrl, asset.data.remoteUrl) : asset.coverUrl,
+                        data: { ...asset.data, dataUrl: await resolveImageUrl(asset.data.storageKey, asset.data.dataUrl, asset.data.remoteUrl) },
                     };
                 if (!asset.data.dataUrl.startsWith("data:image/")) return asset;
                 const image = await uploadImage(asset.data.dataUrl);
-                return { ...asset, coverUrl: asset.coverUrl.startsWith("data:image/") ? image.url : asset.coverUrl, data: { ...asset.data, dataUrl: image.url, storageKey: image.storageKey, bytes: image.bytes, mimeType: image.mimeType } };
+                return { ...asset, coverUrl: asset.coverUrl.startsWith("data:image/") ? image.url : asset.coverUrl, data: { ...asset.data, dataUrl: image.url, storageKey: image.storageKey, remoteUrl: image.remoteUrl, bytes: image.bytes, mimeType: image.mimeType } };
             }),
         );
         return parsed;

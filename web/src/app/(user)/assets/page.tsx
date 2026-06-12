@@ -137,7 +137,7 @@ export default function AssetsPage() {
     const readImageFile = async (file?: File) => {
         if (!file || !file.type.startsWith("image/")) return;
         const image = await uploadImage(file);
-        const draft = { dataUrl: image.url, storageKey: image.storageKey, width: image.width, height: image.height, bytes: image.bytes, mimeType: image.mimeType };
+        const draft = { dataUrl: image.url, storageKey: image.storageKey, remoteUrl: image.remoteUrl, width: image.width, height: image.height, bytes: image.bytes, mimeType: image.mimeType };
         setImageDraft(draft);
         if (!form.getFieldValue("coverUrl")) form.setFieldValue("coverUrl", draft.dataUrl);
         if (!form.getFieldValue("title")) form.setFieldValue("title", file.name);

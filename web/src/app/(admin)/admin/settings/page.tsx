@@ -37,6 +37,7 @@ const emptySettings: AdminSettings = {
             allowCustomChannel: true,
         },
         auth: { allowRegister: true, linuxDo: { enabled: false } },
+        marketing: { registerCredits: 0, dailyCredits: 0 },
     },
     private: { channels: [], promptSync: { enabled: true, cron: "*/5 * * * *" }, auth: { linuxDo: { clientId: "", clientSecret: "" } } },
 };
@@ -845,6 +846,10 @@ function normalizePublicSetting(setting: Partial<AdminSettings["public"]> = {}):
             linuxDo: {
                 enabled: setting.auth?.linuxDo?.enabled === true,
             },
+        },
+        marketing: {
+            registerCredits: Math.max(0, Number(setting.marketing?.registerCredits) || 0),
+            dailyCredits: Math.max(0, Number(setting.marketing?.dailyCredits) || 0),
         },
     };
 }

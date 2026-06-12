@@ -18,6 +18,9 @@ export type AdminUser = {
     avatarUrl: string;
     role: "user" | "admin";
     credits: number;
+    subscriptionId: string;
+    subscriptionName: string;
+    subscriptionExpireAt: string;
     affCode: string;
     affCount: number;
     inviterId: string;
@@ -48,6 +51,56 @@ export type AdminCreditLog = {
 export type AdminCreditLogListResponse = {
     items: AdminCreditLog[];
     total: number;
+};
+
+export type AdminMarketingSettings = {
+    registerCredits: number;
+    dailyCredits: number;
+};
+
+export type AdminSubscriptionPlan = {
+    id: string;
+    name: string;
+    description: string;
+    durationDays: number;
+    enabled: boolean;
+    createdAt: string;
+    updatedAt: string;
+};
+
+export type AdminSubscriptionPlanListResponse = {
+    items: AdminSubscriptionPlan[];
+    total: number;
+};
+
+export type AdminRedemptionCodeType = "credits" | "subscription";
+
+export type AdminRedemptionCode = {
+    id: string;
+    code: string;
+    batchId: string;
+    type: AdminRedemptionCodeType;
+    credits: number;
+    subscriptionId: string;
+    subscriptionName: string;
+    subscriptionDurationDays: number;
+    used: boolean;
+    usedBy: string;
+    usedAt: string;
+    createdAt: string;
+    updatedAt: string;
+};
+
+export type AdminRedemptionCodeListResponse = {
+    items: AdminRedemptionCode[];
+    total: number;
+};
+
+export type GenerateAdminRedemptionCodePayload = {
+    type: AdminRedemptionCodeType;
+    credits?: number;
+    subscriptionId?: string;
+    count: number;
 };
 
 export type AdminUserQuery = {
@@ -82,6 +135,34 @@ export async function saveAdminCreditLog(token: string, log: Partial<AdminCredit
 
 export async function deleteAdminCreditLog(token: string, id: string) {
     return apiDelete<boolean>(`/api/admin/credit-logs/${encodeURIComponent(id)}`, token);
+}
+
+export async function fetchAdminMarketingSettings(token: string) {
+    return apiGet<AdminMarketingSettings>("/api/admin/marketing/settings", undefined, token);
+}
+
+export async function saveAdminMarketingSettings(token: string, settings: AdminMarketingSettings) {
+    return apiPost<AdminMarketingSettings>("/api/admin/marketing/settings", settings, token);
+}
+
+export async function fetchAdminSubscriptionPlans(token: string, query: AdminUserQuery = {}) {
+    return apiGet<AdminSubscriptionPlanListResponse>("/api/admin/marketing/subscriptions", compactApiParams(query), token);
+}
+
+export async function saveAdminSubscriptionPlan(token: string, plan: Partial<AdminSubscriptionPlan>) {
+    return apiPost<AdminSubscriptionPlan>("/api/admin/marketing/subscriptions", plan, token);
+}
+
+export async function deleteAdminSubscriptionPlan(token: string, id: string) {
+    return apiDelete<boolean>(`/api/admin/marketing/subscriptions/${encodeURIComponent(id)}`, token);
+}
+
+export async function fetchAdminRedemptionCodes(token: string, query: AdminUserQuery & { type?: string } = {}) {
+    return apiGet<AdminRedemptionCodeListResponse>("/api/admin/marketing/redemption-codes", compactApiParams(query), token);
+}
+
+export async function generateAdminRedemptionCodes(token: string, payload: GenerateAdminRedemptionCodePayload) {
+    return apiPost<AdminRedemptionCode[]>("/api/admin/marketing/redemption-codes/generate", payload, token);
 }
 
 export async function fetchAdminPromptCategories(token: string) {
@@ -191,6 +272,7 @@ export type AdminPublicSettings = {
             enabled: boolean;
         };
     };
+    marketing: AdminMarketingSettings;
 };
 
 export type AdminPrivateSettings = {

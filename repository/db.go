@@ -73,13 +73,27 @@ func DB() (*gorm.DB, error) {
 		dbErr = db.AutoMigrate(
 			&model.User{},
 			&model.CreditLog{},
+			&model.SubscriptionPlan{},
+			&model.RedemptionCode{},
+			&model.DailyRewardClaim{},
 			&model.UserData{},
 			&model.Prompt{},
 			&model.Asset{},
 			&model.Setting{},
 		)
+		if dbErr != nil {
+			return
+		}
+		dbErr = ensureUserDataPayloadColumn(db, driver)
 	})
 	return db, dbErr
+}
+
+func ensureUserDataPayloadColumn(db *gorm.DB, driver string) error {
+	if driver != "mysql" {
+		return nil
+	}
+	return db.Exec("ALTER TABLE user_data MODIFY COLUMN payload LONGTEXT").Error
 }
 
 func dialector(driver string, dsn string) gorm.Dialector {

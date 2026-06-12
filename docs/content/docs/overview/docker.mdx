@@ -67,3 +67,5 @@ DATABASE_DSN=/app/data/infinite-canvas.db
 ```
 
 如果需要让火山方舟拉取本地上传的 Seedance 参考素材，还需要把 `PUBLIC_BASE_URL` 设置为公网可访问的站点地址。
+
+如果需要让登录用户换浏览器或设备后仍能恢复画布图片，需要配置腾讯云 COS：`TENCENT_COS_SECRET_ID`、`TENCENT_COS_SECRET_KEY`、`TENCENT_COS_BUCKET`、`TENCENT_COS_REGION`，可选配置 `TENCENT_COS_CDN_DOMAIN` 作为图片展示域名。

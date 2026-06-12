@@ -11,6 +11,9 @@ export type AuthUser = {
     avatarUrl: string;
     role: UserRole;
     credits: number;
+    subscriptionId: string;
+    subscriptionName: string;
+    subscriptionExpireAt: string;
     createdAt: string;
     updatedAt: string;
 };

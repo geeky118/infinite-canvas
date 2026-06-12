@@ -37,19 +37,11 @@ COPY --from=api-build /server /app/server
 COPY --from=web-build /app/web/public /app/web/public
 COPY --from=web-build /app/web/.next/standalone /app/web
 COPY --from=web-build /app/web/.next/static /app/web/.next/static
+COPY --from=api-build /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/ca-certificates.crt
 ENV NODE_ENV=production
 ENV HOSTNAME=0.0.0.0
 ENV PORT=3000
 ENV PROMPT_DATA_DIR=/app/data/prompts
-RUN set -eux; \
-    printf '%s\n' \
-        'deb https://mirrors.tuna.tsinghua.edu.cn/debian/ bookworm main contrib non-free non-free-firmware' \
-        'deb https://mirrors.tuna.tsinghua.edu.cn/debian/ bookworm-updates main contrib non-free non-free-firmware' \
-        'deb https://mirrors.tuna.tsinghua.edu.cn/debian-security bookworm-security main contrib non-free non-free-firmware' \
-        > /etc/apt/sources.list; \
-    apt-get -o Acquire::Retries=5 -o Acquire::http::Timeout=30 -o Acquire::https::Timeout=30 update; \
-    apt-get -o Acquire::Retries=5 -o Acquire::http::Timeout=30 -o Acquire::https::Timeout=30 install -y --no-install-recommends ca-certificates; \
-    rm -rf /var/lib/apt/lists/*
 RUN mkdir -p /app/data/prompts
 
 EXPOSE 3000

@@ -23,6 +23,7 @@ export type CanvasProject = {
 
 type CanvasStore = {
     hydrated: boolean;
+    cloudHydrated: boolean;
     projects: CanvasProject[];
     createProject: (title?: string) => string;
     importProject: (project: Partial<CanvasProject>) => string;
@@ -30,6 +31,7 @@ type CanvasStore = {
     renameProject: (id: string, title: string) => void;
     deleteProjects: (ids: string[]) => void;
     replaceProjects: (projects: CanvasProject[]) => void;
+    setCloudHydrated: (cloudHydrated: boolean) => void;
     updateProject: (id: string, patch: Partial<Pick<CanvasProject, "nodes" | "connections" | "chatSessions" | "activeChatId" | "backgroundMode" | "showImageInfo" | "systemPrompt" | "viewport">>) => void;
 };
 
@@ -64,6 +66,7 @@ export const useCanvasStore = create<CanvasStore>()(
     persist(
         (set, get) => ({
             hydrated: false,
+            cloudHydrated: false,
             projects: [],
             createProject: (title = "未命名画布") => {
                 const now = new Date().toISOString();
@@ -117,6 +120,7 @@ export const useCanvasStore = create<CanvasStore>()(
                     return { projects };
                 }),
             replaceProjects: (projects) => set({ projects }),
+            setCloudHydrated: (cloudHydrated) => set({ cloudHydrated }),
             updateProject: (id, patch) =>
                 set((state) => ({
                     projects: state.projects.map((project) => (project.id === id ? { ...project, ...patch, updatedAt: new Date().toISOString() } : project)),

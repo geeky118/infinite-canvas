@@ -9,6 +9,7 @@ import { saveAs } from "file-saver";
 import { ImageSettingsPanel } from "@/components/image-settings-panel";
 import { ModelPicker } from "@/components/model-picker";
 import { PromptSelectDialog } from "@/components/prompts/prompt-select-dialog";
+import { readImageWorkbenchPreset } from "@/lib/image-workbench-preset";
 import { AssetPickerModal, type InsertAssetPayload } from "@/app/(user)/canvas/components/asset-picker-modal";
 import { canvasThemes } from "@/lib/canvas-theme";
 import { imageReferenceLabel } from "@/lib/image-reference-prompt";
@@ -25,6 +26,7 @@ type GeneratedImage = {
     id: string;
     dataUrl: string;
     storageKey?: string;
+    remoteUrl?: string;
     durationMs: number;
     width: number;
     height: number;
@@ -70,6 +72,7 @@ const logStore = localforage.createInstance({ name: "infinite-canvas", storeName
 export default function ImagePage() {
     const { message } = App.useApp();
     const fileInputRef = useRef<HTMLInputElement>(null);
+    const pendingPromptModelContextRef = useRef("");
     const config = useConfigStore((state) => state.config);
     const effectiveConfig = useEffectiveConfig();
     const updateConfig = useConfigStore((state) => state.updateConfig);
@@ -105,12 +108,40 @@ export default function ImagePage() {
         void refreshLogs();
     }, []);
 
+    useEffect(() => {
+        const urlParams = new URLSearchParams(window.location.search);
+        const preset = urlParams.get("preset") ? readImageWorkbenchPreset() : null;
+        const incomingPrompt = (preset?.prompt || urlParams.get("prompt") || "").trim();
+        if (!incomingPrompt) return;
+        setPrompt(incomingPrompt);
+        const inferredParams = extractImageParamsFromPrompt(incomingPrompt);
+        const params = { ...inferredParams, ...compactPresetParams(preset) };
+        if (params.imageModel) updateConfig("imageModel", params.imageModel);
+        else pendingPromptModelContextRef.current = `${incomingPrompt} ${preset?.context || ""}`;
+        if (params.size) updateConfig("size", params.size);
+        if (params.quality) updateConfig("quality", params.quality);
+        if (params.count) updateConfig("count", params.count);
+        const nextSearchParams = new URLSearchParams(window.location.search);
+        nextSearchParams.delete("prompt");
+        nextSearchParams.delete("preset");
+        window.history.replaceState(null, "", `${window.location.pathname}${nextSearchParams.size ? `?${nextSearchParams}` : ""}${window.location.hash}`);
+    }, [updateConfig]);
+
+    useEffect(() => {
+        const modelContext = pendingPromptModelContextRef.current.trim();
+        if (!modelContext) return;
+        const matchedModel = matchPromptImageModel(modelContext, effectiveConfig.imageModels);
+        if (!matchedModel) return;
+        updateConfig("imageModel", matchedModel);
+        pendingPromptModelContextRef.current = "";
+    }, [effectiveConfig.imageModels, updateConfig]);
+
     const addReferences = async (files?: FileList | null) => {
         const imageFiles = Array.from(files || []).filter((file) => file.type.startsWith("image/"));
         const nextReferences = await Promise.all(
             imageFiles.map(async (file) => {
                 const image = await uploadImage(file);
-                return { id: nanoid(), name: file.name, type: image.mimeType, dataUrl: image.url, storageKey: image.storageKey };
+                return { id: nanoid(), name: file.name, type: image.mimeType, dataUrl: image.url, storageKey: image.storageKey, remoteUrl: image.remoteUrl };
             }),
         );
         setReferences((value) => [...value, ...nextReferences]);
@@ -127,7 +158,7 @@ export default function ImagePage() {
             const nextReferences = await Promise.all(
                 blobs.map(async (blob, index) => {
                     const image = await uploadImage(blob);
-                    return { id: nanoid(), name: `clipboard-${index + 1}.png`, type: image.mimeType, dataUrl: image.url, storageKey: image.storageKey };
+                    return { id: nanoid(), name: `clipboard-${index + 1}.png`, type: image.mimeType, dataUrl: image.url, storageKey: image.storageKey, remoteUrl: image.remoteUrl };
                 }),
             );
             setReferences((value) => [...value, ...nextReferences]);
@@ -171,7 +202,7 @@ export default function ImagePage() {
             const logImages = await Promise.all(
                 successImages.map(async (image) => {
                     const stored = await uploadImage(image.dataUrl);
-                    return { ...image, dataUrl: stored.url, storageKey: stored.storageKey, width: stored.width, height: stored.height, bytes: stored.bytes, mimeType: stored.mimeType };
+                    return { ...image, dataUrl: stored.url, storageKey: stored.storageKey, remoteUrl: stored.remoteUrl, width: stored.width, height: stored.height, bytes: stored.bytes, mimeType: stored.mimeType };
                 }),
             );
             saveLog(
@@ -199,7 +230,7 @@ export default function ImagePage() {
 
     const addResultToReferences = async (image: GeneratedImage, index: number) => {
         const stored = await uploadImage(image.dataUrl);
-        setReferences((value) => [...value, { id: nanoid(), name: `result-${index + 1}.png`, type: stored.mimeType, dataUrl: stored.url, storageKey: stored.storageKey }]);
+        setReferences((value) => [...value, { id: nanoid(), name: `result-${index + 1}.png`, type: stored.mimeType, dataUrl: stored.url, storageKey: stored.storageKey, remoteUrl: stored.remoteUrl }]);
         message.success("已加入参考图");
     };
 
@@ -211,7 +242,7 @@ export default function ImagePage() {
             coverUrl: stored.url,
             tags: [],
             source: "生图工作台",
-            data: { dataUrl: stored.url, storageKey: stored.storageKey, width: stored.width, height: stored.height, bytes: stored.bytes, mimeType: stored.mimeType },
+            data: { dataUrl: stored.url, storageKey: stored.storageKey, remoteUrl: stored.remoteUrl, width: stored.width, height: stored.height, bytes: stored.bytes, mimeType: stored.mimeType },
             metadata: { source: "image-page", prompt },
         });
         message.success("已加入我的素材");
@@ -221,8 +252,9 @@ export default function ImagePage() {
         if (payload.kind === "text") {
             setPrompt(payload.content);
         } else if (payload.kind === "image") {
-            const stored = await uploadImage(payload.dataUrl);
-            setReferences((value) => [...value, { id: nanoid(), name: payload.title, type: stored.mimeType, dataUrl: stored.url, storageKey: stored.storageKey }]);
+            const dataUrl = payload.storageKey ? await resolveImageUrl(payload.storageKey, payload.dataUrl, payload.remoteUrl) : payload.dataUrl || payload.remoteUrl || "";
+            const stored = payload.storageKey ? { url: dataUrl, storageKey: payload.storageKey, remoteUrl: payload.remoteUrl, mimeType: "image/png" } : await uploadImage(dataUrl);
+            setReferences((value) => [...value, { id: nanoid(), name: payload.title, type: stored.mimeType, dataUrl: stored.url, storageKey: stored.storageKey, remoteUrl: stored.remoteUrl }]);
         } else {
             message.warning("生图工作台只能使用文本或图片素材");
         }
@@ -581,6 +613,66 @@ function updateResultAt(results: GenerationResult[], index: number, next: Partia
     return results.map((item, itemIndex) => (itemIndex === index ? { ...item, ...next } : item));
 }
 
+function extractImageParamsFromPrompt(prompt: string) {
+    const size = extractPromptSize(prompt);
+    const quality = extractPromptQuality(prompt);
+    const count = extractPromptCount(prompt);
+    return { size, quality, count };
+}
+
+function compactPresetParams(preset: ReturnType<typeof readImageWorkbenchPreset>) {
+    return {
+        imageModel: typeof preset?.imageModel === "string" ? preset.imageModel : "",
+        quality: typeof preset?.quality === "string" ? preset.quality : "",
+        size: typeof preset?.size === "string" ? preset.size : "",
+        count: typeof preset?.count === "string" ? preset.count : "",
+    };
+}
+
+function extractPromptSize(prompt: string) {
+    const dimension = prompt.match(/\b([1-9]\d{2,4})\s*[xX*×]\s*([1-9]\d{2,4})\b/);
+    if (dimension) return `${dimension[1]}x${dimension[2]}`;
+    const ratio = prompt.match(/\b(1:1|3:2|2:3|4:3|3:4|16:9|9:16)\b/);
+    if (!ratio) return "";
+    const suffix = /\b(2k|2048)\b/i.test(prompt) ? "-2k" : /\b(4k|3840|2160)\b/i.test(prompt) ? "-4k" : "";
+    const value = `${ratio[1]}${suffix}`;
+    return ["1:1-4k", "3:2-2k", "2:3-2k", "3:2-4k", "2:3-4k", "4:3-2k", "3:4-2k", "4:3-4k", "3:4-4k"].includes(value) ? ratio[1] : value;
+}
+
+function extractPromptQuality(prompt: string) {
+    if (/(高质量|高清|精细|high quality|\bhigh\b)/i.test(prompt)) return "high";
+    if (/(中等质量|medium quality|\bmedium\b)/i.test(prompt)) return "medium";
+    if (/(低质量|草稿|low quality|\blow\b)/i.test(prompt)) return "low";
+    if (/(自动质量|auto quality|\bauto\b)/i.test(prompt)) return "auto";
+    return "";
+}
+
+function extractPromptCount(prompt: string) {
+    const match = prompt.match(/(\d+|[一二两三四五六七八九十])\s*(?:张|个|幅|款|版|种)/);
+    if (!match) return "";
+    const count = normalizeCountWord(match[1]);
+    return count ? String(Math.min(10, count)) : "";
+}
+
+function normalizeCountWord(value: string) {
+    const map: Record<string, number> = { 一: 1, 二: 2, 两: 2, 三: 3, 四: 4, 五: 5, 六: 6, 七: 7, 八: 8, 九: 9, 十: 10 };
+    return Number(value) || map[value] || 0;
+}
+
+function matchPromptImageModel(context: string, imageModels: string[]) {
+    const value = context.toLowerCase();
+    const normalizedModels = imageModels.map((model) => ({ model, value: model.toLowerCase() }));
+    const keywordGroups = [
+        ["gpt-image-2", "gpt image 2", "chatgpt image"],
+        ["nano-banana-pro", "nano banana pro", "nanobanana"],
+        ["gpt-4o", "gpt4o"],
+        ["seedream"],
+    ];
+    const keywords = keywordGroups.find((group) => group.some((keyword) => value.includes(keyword)));
+    if (!keywords) return "";
+    return normalizedModels.find((item) => keywords.some((keyword) => item.value.includes(keyword.replace(/\s+/g, "-")) || item.value.includes(keyword.replace(/-/g, "")) || item.value.includes(keyword)))?.model || "";
+}
+
 function LogPanel({
     logs,
     selectedLogIds,
@@ -704,13 +796,13 @@ async function normalizeLog(log: Partial<GenerationLog>): Promise<GenerationLog>
     const references = await Promise.all(
         (log.references || []).map(async (item) => ({
             ...item,
-            dataUrl: await resolveImageUrl(item.storageKey, item.dataUrl),
+            dataUrl: await resolveImageUrl(item.storageKey, item.dataUrl, item.remoteUrl),
         })),
     );
     const images = await Promise.all(
         (log.images || []).map(async (item) => ({
             ...item,
-            dataUrl: await resolveImageUrl(item.storageKey, item.dataUrl),
+            dataUrl: await resolveImageUrl(item.storageKey, item.dataUrl, item.remoteUrl),
         })),
     );
     const config = normalizeLogConfig(log);

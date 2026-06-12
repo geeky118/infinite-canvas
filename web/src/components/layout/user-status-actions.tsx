@@ -1,13 +1,15 @@
 "use client";
 
 import type { CSSProperties, RefObject } from "react";
+import { useState } from "react";
 import { Avatar, Dropdown, Tooltip } from "antd";
-import { Keyboard, LogOut, MessageSquareText, Settings2, Shield } from "lucide-react";
+import { Gift, Keyboard, LogOut, MessageSquareText, Settings2, Shield } from "lucide-react";
 import type { ItemType } from "antd/es/menu/interface";
 import Link from "next/link";
 
 import { AnimatedThemeToggler } from "@/components/ui/animated-theme-toggler";
 import { VersionReleaseModal } from "@/components/layout/version-release-modal";
+import { RedeemCenterModal } from "@/components/layout/redeem-center-modal";
 import { CreditSymbol } from "@/constant/credits";
 import { canvasThemes } from "@/lib/canvas-theme";
 import { useConfigStore } from "@/stores/use-config-store";
@@ -16,6 +18,7 @@ import { useUserStore } from "@/stores/use-user-store";
 
 type UserStatusActionsProps = {
     showConfig?: boolean;
+    showVersion?: boolean;
     variant?: "default" | "canvas";
     onOpenShortcuts?: () => void;
     onOpenProjectPrompt?: () => void;
@@ -25,7 +28,8 @@ type UserStatusActionsProps = {
     getPopupContainer?: (node: HTMLElement) => HTMLElement;
 };
 
-export function UserStatusActions({ showConfig = true, variant = "default", onOpenShortcuts, onOpenProjectPrompt, accountOpen, onAccountOpenChange, accountRef, getPopupContainer }: UserStatusActionsProps) {
+export function UserStatusActions({ showConfig = true, showVersion = true, variant = "default", onOpenShortcuts, onOpenProjectPrompt, accountOpen, onAccountOpenChange, accountRef, getPopupContainer }: UserStatusActionsProps) {
+    const [redeemOpen, setRedeemOpen] = useState(false);
     const theme = useThemeStore((state) => state.theme);
     const setTheme = useThemeStore((state) => state.setTheme);
     const user = useUserStore((state) => state.user);
@@ -40,9 +44,12 @@ export function UserStatusActions({ showConfig = true, variant = "default", onOp
     const iconStyle: CSSProperties | undefined = variant === "canvas" ? { color: canvasTheme.node.text } : undefined;
     const versionStyle = iconStyle;
     const avatarStyle: CSSProperties | undefined = variant === "canvas" ? { borderColor: canvasTheme.toolbar.border, color: canvasTheme.node.text, background: "transparent" } : undefined;
+    const shouldShowConfig = showConfig && variant !== "canvas";
+    const shouldShowVersion = showVersion && variant !== "canvas";
     const menuItems: ItemType[] = [
         { key: "user", disabled: true, label: <span className="font-medium text-current">{userName}</span> },
         ...(user?.role === "admin" ? [{ key: "admin", icon: <Shield className="size-4" />, label: <Link href="/admin">管理后台</Link> }] : []),
+        ...(user ? [{ key: "redeem", icon: <Gift className="size-4" />, label: "兑换中心", onClick: () => setRedeemOpen(true) }] : []),
         ...(onOpenShortcuts ? [{ key: "shortcuts", icon: <Keyboard className="size-4" />, label: "快捷键", onClick: onOpenShortcuts }] : []),
         { type: "divider" },
         { key: "logout", icon: <LogOut className="size-4" />, label: "退出登录", onClick: logout },
@@ -50,13 +57,13 @@ export function UserStatusActions({ showConfig = true, variant = "default", onOp
 
     return (
         <div className="inline-flex shrink-0 items-center gap-1">
-            {showConfig ? (
+            {shouldShowConfig ? (
                 <button type="button" className={naturalIconClass} style={iconStyle} onClick={() => openConfigDialog(false)} aria-label="配置" title="配置">
                     <Settings2 className="size-4" />
                 </button>
             ) : null}
             <AnimatedThemeToggler theme={theme} onThemeChange={setTheme} className={naturalIconClass} style={iconStyle} aria-label={theme === "dark" ? "切换到浅色主题" : "切换到深色主题"} title={theme === "dark" ? "切换到浅色主题" : "切换到深色主题"} />
-            <VersionReleaseModal style={versionStyle} />
+            {shouldShowVersion ? <VersionReleaseModal style={versionStyle} /> : null}
             {variant === "canvas" && onOpenProjectPrompt ? (
                 <button type="button" className={naturalIconClass} style={iconStyle} onClick={onOpenProjectPrompt} aria-label="项目系统提示词" title="项目系统提示词">
                     <MessageSquareText className="size-4" />
@@ -97,6 +104,7 @@ export function UserStatusActions({ showConfig = true, variant = "default", onOp
                     </Dropdown>
                 </div>
             ) : null}
+            <RedeemCenterModal open={redeemOpen} onClose={() => setRedeemOpen(false)} />
         </div>
     );
 }

@@ -14,6 +14,7 @@ Docker resources, or restart other services.
 from __future__ import annotations
 
 import argparse
+import fnmatch
 import os
 import shlex
 import tarfile
@@ -34,6 +35,14 @@ DEFAULT_PORT = "127.0.0.1:18082"
 
 EXCLUDED_DIRS = {".git", ".idea", "node_modules", ".next", ".source", "out", "data", ".cache"}
 EXCLUDED_SUFFIXES = (".tar", ".tar.gz", ".zip", ".7z", ".log", ".tsbuildinfo")
+EXCLUDED_PATTERNS = ("output-*-auth-state.json", "*auth-state*.json")
+SERVICE_ENV_KEYS = (
+    "TENCENT_COS_SECRET_ID",
+    "TENCENT_COS_SECRET_KEY",
+    "TENCENT_COS_BUCKET",
+    "TENCENT_COS_REGION",
+    "TENCENT_COS_CDN_DOMAIN",
+)
 
 
 def parse_args() -> argparse.Namespace:
@@ -59,6 +68,8 @@ def should_exclude(root: Path, path: Path) -> bool:
     if parts & EXCLUDED_DIRS:
         return True
     if rel == ".env" or rel.startswith(".env."):
+        return True
+    if any(fnmatch.fnmatch(path.name, pattern) or fnmatch.fnmatch(rel, pattern) for pattern in EXCLUDED_PATTERNS):
         return True
     return path.is_file() and rel.endswith(EXCLUDED_SUFFIXES)
 
@@ -107,6 +118,29 @@ def upload(client: paramiko.SSHClient, local_path: Path, remote_path: str) -> No
         sftp.close()
 
 
+def upload_text(client: paramiko.SSHClient, content: str, remote_path: str) -> None:
+    sftp = client.open_sftp()
+    try:
+        with sftp.file(remote_path, "w") as file:
+            file.write(content)
+    finally:
+        sftp.close()
+
+
+def service_env_from_local() -> dict[str, str]:
+    return {key: value for key in SERVICE_ENV_KEYS if (value := os.environ.get(key, "").strip())}
+
+
+def service_override_content(service: str, env: dict[str, str]) -> str:
+    lines = ["services:", f"  {service}:", "    environment:"]
+    lines.extend(f"      {key}: {yaml_quote(value)}" for key, value in env.items())
+    return "\n".join(lines) + "\n"
+
+
+def yaml_quote(value: str) -> str:
+    return "'" + value.replace("'", "''") + "'"
+
+
 def main() -> None:
     args = parse_args()
     password = args.password or os.environ.get("INFINITE_CANVAS_SSH_PASSWORD") or os.environ.get("SSH_PASSWORD")
@@ -124,10 +158,18 @@ def main() -> None:
 
     client = connect(args.host, args.user, password)
     try:
+        remote_override = f"{args.remote_root}/docker-compose.infinite-canvas.override.yml"
+        service_env = service_env_from_local()
+        if service_env:
+            upload_text(client, service_override_content(args.service, service_env), remote_override)
+            print(f"Updated service environment override: {remote_override}")
+        override_exists = run(client, f"test -f {remote_override} && echo yes || true", timeout=30).strip() == "yes"
+        compose_files = f"-f {args.remote_root}/docker-compose.yml" + (f" -f {remote_override}" if override_exists else "")
+
         inspect = run(
             client,
             f"set -e; test -f {args.remote_root}/docker-compose.yml; "
-            f"docker compose -f {args.remote_root}/docker-compose.yml config --services | grep -x {args.service!r}; "
+            f"docker compose {compose_files} config --services | grep -x {args.service!r}; "
             f"docker ps --filter name={args.container!r} --format '{{{{.Names}}}} {{{{.Status}}}}'",
         )
         print(inspect.strip())
@@ -147,7 +189,7 @@ tar -xzf {remote_tar} -C {remote_dir}
 cd {remote_dir}
 timeout {args.build_timeout}s docker build --progress=plain -f {dockerfile} {extra_build_args} -t {args.image} .
 cd {args.remote_root}
-docker compose up -d --no-deps --force-recreate {args.service}
+docker compose {compose_files} up -d --no-deps --force-recreate {args.service}
 sleep 5
 docker ps --filter name={args.container!r} --format '{{{{.Names}}}} {{{{.Image}}}} {{{{.Status}}}}'
 curl -fsS --max-time 15 http://{args.port}/ >/dev/null

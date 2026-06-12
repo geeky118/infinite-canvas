@@ -20,6 +20,11 @@ type Config struct {
 	StorageDriver       string `env:"STORAGE_DRIVER" envDefault:"sqlite"`
 	DatabaseDSN         string `env:"DATABASE_DSN" envDefault:"data/infinite-canvas.db"`
 	PublicBaseURL       string `env:"PUBLIC_BASE_URL"`
+	TencentCOSSecretID  string `env:"TENCENT_COS_SECRET_ID"`
+	TencentCOSSecretKey string `env:"TENCENT_COS_SECRET_KEY"`
+	TencentCOSBucket    string `env:"TENCENT_COS_BUCKET"`
+	TencentCOSRegion    string `env:"TENCENT_COS_REGION"`
+	TencentCOSCDNDomain string `env:"TENCENT_COS_CDN_DOMAIN"`
 	LinuxDoAuthorizeURL string `env:"LINUX_DO_AUTHORIZE_URL" envDefault:"https://connect.linux.do/oauth2/authorize"`
 	LinuxDoTokenURL     string `env:"LINUX_DO_TOKEN_URL" envDefault:"https://connect.linux.do/oauth2/token"`
 	LinuxDoUserInfoURL  string `env:"LINUX_DO_USERINFO_URL" envDefault:"https://connect.linux.do/api/user"`

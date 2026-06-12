@@ -57,7 +57,7 @@ export default function AssetLibraryPage() {
                     tags: asset.tags,
                     source: asset.category,
                     note: asset.description,
-                    data: { dataUrl: image.url, storageKey: image.storageKey, width: image.width, height: image.height, bytes: image.bytes, mimeType: image.mimeType },
+                    data: { dataUrl: image.url, storageKey: image.storageKey, remoteUrl: image.remoteUrl, width: image.width, height: image.height, bytes: image.bytes, mimeType: image.mimeType },
                     metadata: { source: "asset-library", assetId: asset.id },
                 });
             } else {
