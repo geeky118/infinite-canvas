@@ -4,6 +4,7 @@ import (
 	"log"
 	"sync"
 
+	"github.com/basketikun/infinite-canvas/config"
 	"github.com/basketikun/infinite-canvas/model"
 	"github.com/basketikun/infinite-canvas/repository"
 	"github.com/robfig/cron/v3"
@@ -18,6 +19,10 @@ var (
 )
 
 func StartPromptSyncScheduler() {
+	if !config.Cfg.PromptSyncScheduler {
+		log.Printf("prompt sync scheduler disabled")
+		return
+	}
 	promptSyncOnce.Do(func() {
 		promptSyncCron = cron.New()
 		promptSyncCron.Start()
@@ -26,6 +31,9 @@ func StartPromptSyncScheduler() {
 }
 
 func RefreshPromptSyncScheduler() {
+	if !config.Cfg.PromptSyncScheduler {
+		return
+	}
 	promptSyncMu.Lock()
 	defer promptSyncMu.Unlock()
 	if promptSyncCron == nil {
@@ -67,7 +75,7 @@ func normalizePromptSyncSetting(setting model.PromptSyncSetting) model.PromptSyn
 		setting.Cron = defaultPromptSyncCron
 	}
 	if setting.Enabled == nil {
-		enabled := true
+		enabled := false
 		setting.Enabled = &enabled
 	}
 	return setting

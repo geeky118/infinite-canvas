@@ -53,6 +53,49 @@ export type AdminCreditLogListResponse = {
     total: number;
 };
 
+export type AdminOverview = {
+    users: {
+        total: number;
+        active: number;
+        banned: number;
+        admins: number;
+    };
+    credits: {
+        balanceTotal: number;
+        logTotal: number;
+        incomeTotal: number;
+        expenseTotal: number;
+    };
+    content: {
+        prompts: number;
+        assets: number;
+        images: number;
+        texts: number;
+    };
+    marketing: {
+        subscriptionPlans: number;
+        enabledSubscriptionPlans: number;
+        redemptionCodes: number;
+        unusedCodes: number;
+        usedCodes: number;
+        creditCodes: number;
+        subscriptionCodes: number;
+        dailyClaims: number;
+    };
+    finance: {
+        adminAdjustIncome: number;
+        redeemIncome: number;
+        dailyRewardIncome: number;
+        aiExpense: number;
+        aiRefund: number;
+    };
+    systemModules: {
+        total: number;
+        groups: number;
+        permissions: string[];
+    };
+};
+
 export type AdminMarketingSettings = {
     registerCredits: number;
     dailyCredits: number;
@@ -129,6 +172,10 @@ export async function fetchAdminCreditLogs(token: string, query: AdminUserQuery 
     return apiGet<AdminCreditLogListResponse>("/api/admin/credit-logs", compactApiParams(query), token);
 }
 
+export async function fetchAdminOverview(token: string) {
+    return apiGet<AdminOverview>("/api/admin/overview", undefined, token);
+}
+
 export async function saveAdminCreditLog(token: string, log: Partial<AdminCreditLog>) {
     return apiPost<AdminCreditLog>("/api/admin/credit-logs", log, token);
 }
@@ -157,7 +204,7 @@ export async function deleteAdminSubscriptionPlan(token: string, id: string) {
     return apiDelete<boolean>(`/api/admin/marketing/subscriptions/${encodeURIComponent(id)}`, token);
 }
 
-export async function fetchAdminRedemptionCodes(token: string, query: AdminUserQuery & { type?: string } = {}) {
+export async function fetchAdminRedemptionCodes(token: string, query: AdminUserQuery & { type?: string; status?: string; batchId?: string } = {}) {
     return apiGet<AdminRedemptionCodeListResponse>("/api/admin/marketing/redemption-codes", compactApiParams(query), token);
 }
 

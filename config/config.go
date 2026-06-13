@@ -28,6 +28,7 @@ type Config struct {
 	LinuxDoAuthorizeURL string `env:"LINUX_DO_AUTHORIZE_URL" envDefault:"https://connect.linux.do/oauth2/authorize"`
 	LinuxDoTokenURL     string `env:"LINUX_DO_TOKEN_URL" envDefault:"https://connect.linux.do/oauth2/token"`
 	LinuxDoUserInfoURL  string `env:"LINUX_DO_USERINFO_URL" envDefault:"https://connect.linux.do/api/user"`
+	PromptSyncScheduler bool   `env:"PROMPT_SYNC_SCHEDULER_ENABLED" envDefault:"false"`
 }
 
 var Cfg Config

@@ -237,11 +237,28 @@ func RedeemMarketingCode(userID string, code string) (model.MarketingRedeemResul
 			if err != nil {
 				return err
 			}
-			return tx.Model(&model.User{}).Where("id = ?", userID).Updates(map[string]any{
+			if err := tx.Model(&model.User{}).Where("id = ?", userID).Updates(map[string]any{
 				"subscription_id":        item.SubscriptionID,
 				"subscription_name":      item.SubscriptionName,
 				"subscription_expire_at": expireAt,
 				"updated_at":             nowText,
+			}).Error; err != nil {
+				return err
+			}
+			updated := model.User{}
+			if err := tx.Where("id = ?", userID).First(&updated).Error; err != nil {
+				return err
+			}
+			return tx.Create(&model.CreditLog{
+				ID:        newID("credit"),
+				UserID:    userID,
+				Type:      model.CreditLogTypeRedeemCode,
+				Amount:    0,
+				Balance:   updated.Credits,
+				RelatedID: item.Code,
+				Remark:    "兑换码兑换订阅",
+				Extra:     redemptionExtra(item),
+				CreatedAt: nowText,
 			}).Error
 		}
 		return safeMessageError{message: "兑换码类型无效"}

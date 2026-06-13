@@ -39,7 +39,7 @@ const emptySettings: AdminSettings = {
         auth: { allowRegister: true, linuxDo: { enabled: false } },
         marketing: { registerCredits: 0, dailyCredits: 0 },
     },
-    private: { channels: [], promptSync: { enabled: true, cron: "*/5 * * * *" }, auth: { linuxDo: { clientId: "", clientSecret: "" } } },
+    private: { channels: [], promptSync: { enabled: false, cron: "*/5 * * * *" }, auth: { linuxDo: { clientId: "", clientSecret: "" } } },
 };
 const emptyChannel: AdminModelChannel = { protocol: "openai", name: "", baseUrl: "", apiKey: "", models: [], weight: 1, enabled: true, remark: "" };
 
@@ -543,7 +543,7 @@ export default function AdminSettingsPage() {
                                             </Form.Item>
                                         </Col>
                                         <Col xs={24} md={16}>
-                                            <Form.Item name={["private", "promptSync", "cron"]} label="Cron 表达式" extra="默认每 5 分钟同步内置 GitHub 远程提示词源">
+                                            <Form.Item name={["private", "promptSync", "cron"]} label="Cron 表达式" extra="默认关闭；需要服务端开启 PROMPT_SYNC_SCHEDULER_ENABLED=true 后才会按 Cron 自动同步">
                                                 <Input placeholder="*/5 * * * *" />
                                             </Form.Item>
                                         </Col>
@@ -862,7 +862,7 @@ function normalizePrivateSetting(setting: Partial<AdminSettings["private"]> = {}
     return {
         channels: (setting.channels || []).map(normalizeChannel),
         promptSync: {
-            enabled: setting.promptSync?.enabled !== false,
+            enabled: setting.promptSync?.enabled === true,
             cron: setting.promptSync?.cron || "*/5 * * * *",
         },
         auth: {

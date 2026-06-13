@@ -31,8 +31,11 @@ export function useAdminMarketing() {
     const [planPageSize, setPlanPageSize] = useState(defaultPageSize);
     const [codeKeyword, setCodeKeyword] = useState("");
     const [codeType, setCodeType] = useState("");
+    const [codeStatus, setCodeStatus] = useState("");
+    const [codeBatchId, setCodeBatchId] = useState("");
     const [codePage, setCodePage] = useState(1);
     const [codePageSize, setCodePageSize] = useState(defaultPageSize);
+    const [lastGeneratedCodes, setLastGeneratedCodes] = useState<string[]>([]);
 
     const settingsQuery = useQuery({
         queryKey: ["admin", "marketing", "settings", token],
@@ -56,8 +59,8 @@ export function useAdminMarketing() {
     });
 
     const codesQuery = useQuery({
-        queryKey: ["admin", "marketing", "redemption-codes", token, codeKeyword, codeType, codePage, codePageSize],
-        queryFn: () => fetchAdminRedemptionCodes(token, { keyword: codeKeyword, type: codeType as AdminRedemptionCodeType | "", page: codePage, pageSize: codePageSize }),
+        queryKey: ["admin", "marketing", "redemption-codes", token, codeKeyword, codeType, codeStatus, codeBatchId, codePage, codePageSize],
+        queryFn: () => fetchAdminRedemptionCodes(token, { keyword: codeKeyword, type: codeType as AdminRedemptionCodeType | "", status: codeStatus, batchId: codeBatchId, page: codePage, pageSize: codePageSize }),
         enabled: Boolean(token),
         retry: false,
     });
@@ -92,6 +95,7 @@ export function useAdminMarketing() {
     const codeMutation = useMutation({
         mutationFn: (payload: GenerateAdminRedemptionCodePayload) => generateAdminRedemptionCodes(token, payload),
         onSuccess: async (items) => {
+            setLastGeneratedCodes(items.map((item) => item.code));
             await queryClient.invalidateQueries({ queryKey: ["admin", "marketing", "redemption-codes"] });
             message.success(`已生成 ${items.length} 个兑换码`);
         },
@@ -119,8 +123,11 @@ export function useAdminMarketing() {
         codeTotal: codesQuery.data?.total || 0,
         codeKeyword,
         codeType,
+        codeStatus,
+        codeBatchId,
         codePage,
         codePageSize,
+        lastGeneratedCodes,
         isLoading: settingsQuery.isFetching || plansQuery.isFetching || allPlansQuery.isFetching || codesQuery.isFetching || settingsMutation.isPending || planMutation.isPending || deletePlanMutation.isPending || codeMutation.isPending,
         saveSettings: (settings: AdminMarketingSettings) => settingsMutation.mutateAsync(settings),
         savePlan: (plan: Partial<AdminSubscriptionPlan>) => planMutation.mutateAsync(plan),
@@ -141,9 +148,11 @@ export function useAdminMarketing() {
             setPlanPageSize(pageSize);
             setPlanPage(1);
         },
-        searchCodes: (keyword: string, type = codeType) => {
+        searchCodes: (keyword: string, type = codeType, status = codeStatus, batchId = codeBatchId) => {
             setCodeKeyword(keyword);
             setCodeType(type);
+            setCodeStatus(status);
+            setCodeBatchId(batchId);
             setCodePage(1);
         },
         changeCodePage: (page: number) => setCodePage(page),
@@ -154,8 +163,11 @@ export function useAdminMarketing() {
         resetCodeFilters: () => {
             setCodeKeyword("");
             setCodeType("");
+            setCodeStatus("");
+            setCodeBatchId("");
             setCodePage(1);
             setCodePageSize(defaultPageSize);
         },
+        clearLastGeneratedCodes: () => setLastGeneratedCodes([]),
     };
 }

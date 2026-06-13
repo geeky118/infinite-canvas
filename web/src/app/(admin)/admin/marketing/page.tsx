@@ -2,11 +2,12 @@
 
 import { CopyOutlined, DeleteOutlined, EditOutlined, GiftOutlined, PlusOutlined, ReloadOutlined, SearchOutlined } from "@ant-design/icons";
 import { ProTable, type ProColumns } from "@ant-design/pro-components";
-import { App, Button, Card, Col, Form, Input, InputNumber, Modal, Row, Segmented, Select, Space, Statistic, Switch, Tabs, Tag, Tooltip, Typography } from "antd";
+import { App, Button, Card, Col, Flex, Form, Input, InputNumber, Modal, Row, Segmented, Select, Space, Statistic, Switch, Tabs, Tag, Tooltip, Typography } from "antd";
 import dayjs from "dayjs";
 import { useEffect, useMemo, useState } from "react";
 
 import type { AdminRedemptionCode, AdminRedemptionCodeType, AdminSubscriptionPlan } from "@/services/api/admin";
+import { useAdminOverview } from "../use-admin-overview";
 import { useAdminMarketing } from "./use-admin-marketing";
 
 type PlanFormValues = Partial<AdminSubscriptionPlan>;
@@ -23,11 +24,14 @@ export default function AdminMarketingPage() {
     const [planForm] = Form.useForm<PlanFormValues>();
     const [codeForm] = Form.useForm<CodeFormValues>();
     const marketing = useAdminMarketing();
+    const { overview } = useAdminOverview();
     const [planKeywordText, setPlanKeywordText] = useState(marketing.planKeyword);
     const [codeKeywordText, setCodeKeywordText] = useState(marketing.codeKeyword);
+    const [codeBatchText, setCodeBatchText] = useState(marketing.codeBatchId);
     const [editingPlan, setEditingPlan] = useState<Partial<AdminSubscriptionPlan> | null>(null);
     const [deletingPlan, setDeletingPlan] = useState<AdminSubscriptionPlan | null>(null);
     const [isCodeModalOpen, setIsCodeModalOpen] = useState(false);
+    const [isGeneratedModalOpen, setIsGeneratedModalOpen] = useState(false);
     const codeType = Form.useWatch("type", codeForm) || "credits";
 
     useEffect(() => {
@@ -36,6 +40,7 @@ export default function AdminMarketingPage() {
 
     useEffect(() => setPlanKeywordText(marketing.planKeyword), [marketing.planKeyword]);
     useEffect(() => setCodeKeywordText(marketing.codeKeyword), [marketing.codeKeyword]);
+    useEffect(() => setCodeBatchText(marketing.codeBatchId), [marketing.codeBatchId]);
 
     useEffect(() => {
         if (editingPlan) planForm.setFieldsValue({ enabled: true, durationDays: 30, ...editingPlan });
@@ -46,6 +51,7 @@ export default function AdminMarketingPage() {
     }, [codeForm, isCodeModalOpen]);
 
     const enabledPlans = useMemo(() => marketing.allPlans.filter((plan) => plan.enabled), [marketing.allPlans]);
+    const marketingStats = overview?.marketing;
 
     const saveSettings = async () => {
         const value = await settingsForm.validateFields();
@@ -70,6 +76,7 @@ export default function AdminMarketingPage() {
             count: Number(value.count) || 0,
         });
         setIsCodeModalOpen(false);
+        setIsGeneratedModalOpen(true);
     };
 
     const planColumns: ProColumns<AdminSubscriptionPlan>[] = [
@@ -115,20 +122,35 @@ export default function AdminMarketingPage() {
     return (
         <main style={{ padding: 24 }}>
             <Space direction="vertical" size={16} style={{ width: "100%" }}>
-                <Row gutter={16}>
-                    <Col xs={24} md={8}>
+                <Row gutter={[16, 16]}>
+                    <Col xs={24} md={8} xl={4}>
                         <Card variant="borderless">
                             <Statistic title="新注册奖励" value={marketing.settings.registerCredits} suffix="点" />
                         </Card>
                     </Col>
-                    <Col xs={24} md={8}>
+                    <Col xs={24} md={8} xl={4}>
                         <Card variant="borderless">
                             <Statistic title="每日领取" value={marketing.settings.dailyCredits} suffix="点" />
                         </Card>
                     </Col>
-                    <Col xs={24} md={8}>
+                    <Col xs={24} md={8} xl={4}>
                         <Card variant="borderless">
-                            <Statistic title="可用订阅" value={enabledPlans.length} suffix="个" />
+                            <Statistic title="启用订阅" value={marketingStats?.enabledSubscriptionPlans ?? enabledPlans.length} suffix="个" />
+                        </Card>
+                    </Col>
+                    <Col xs={24} md={8} xl={4}>
+                        <Card variant="borderless">
+                            <Statistic title="兑换码总量" value={marketingStats?.redemptionCodes || 0} suffix="个" />
+                        </Card>
+                    </Col>
+                    <Col xs={24} md={8} xl={4}>
+                        <Card variant="borderless">
+                            <Statistic title="未使用码" value={marketingStats?.unusedCodes || 0} suffix="个" />
+                        </Card>
+                    </Col>
+                    <Col xs={24} md={8} xl={4}>
+                        <Card variant="borderless">
+                            <Statistic title="已使用码" value={marketingStats?.usedCodes || 0} suffix="个" />
                         </Card>
                     </Col>
                 </Row>
@@ -217,7 +239,7 @@ export default function AdminMarketingPage() {
                                     <Card variant="borderless">
                                         <Row gutter={16} align="bottom">
                                             <Col flex="320px">
-                                                <Input.Search value={codeKeywordText} placeholder="搜索兑换码、批次或用户" allowClear enterButton={<SearchOutlined />} onSearch={() => marketing.searchCodes(codeKeywordText)} onChange={(event) => setCodeKeywordText(event.target.value)} />
+                                                <Input.Search value={codeKeywordText} placeholder="搜索兑换码、批次或用户" allowClear enterButton={<SearchOutlined />} onSearch={() => marketing.searchCodes(codeKeywordText, marketing.codeType, marketing.codeStatus, codeBatchText)} onChange={(event) => setCodeKeywordText(event.target.value)} />
                                             </Col>
                                             <Col flex="180px">
                                                 <Segmented
@@ -228,13 +250,28 @@ export default function AdminMarketingPage() {
                                                         { label: "点数", value: "credits" },
                                                         { label: "订阅", value: "subscription" },
                                                     ]}
-                                                    onChange={(value) => marketing.searchCodes(codeKeywordText, value === "all" ? "" : String(value))}
+                                                    onChange={(value) => marketing.searchCodes(codeKeywordText, value === "all" ? "" : String(value), marketing.codeStatus, codeBatchText)}
                                                 />
+                                            </Col>
+                                            <Col flex="180px">
+                                                <Segmented
+                                                    block
+                                                    value={marketing.codeStatus || "all"}
+                                                    options={[
+                                                        { label: "全部", value: "all" },
+                                                        { label: "未使用", value: "unused" },
+                                                        { label: "已使用", value: "used" },
+                                                    ]}
+                                                    onChange={(value) => marketing.searchCodes(codeKeywordText, marketing.codeType, value === "all" ? "" : String(value), codeBatchText)}
+                                                />
+                                            </Col>
+                                            <Col flex="240px">
+                                                <Input value={codeBatchText} placeholder="按批次 ID 精确筛选" allowClear onChange={(event) => setCodeBatchText(event.target.value)} onPressEnter={() => marketing.searchCodes(codeKeywordText, marketing.codeType, marketing.codeStatus, codeBatchText)} />
                                             </Col>
                                             <Col flex="none">
                                                 <Space>
                                                     <Button onClick={marketing.resetCodeFilters}>重置</Button>
-                                                    <Button icon={<ReloadOutlined />} onClick={() => marketing.searchCodes(codeKeywordText)}>
+                                                    <Button icon={<ReloadOutlined />} onClick={() => marketing.searchCodes(codeKeywordText, marketing.codeType, marketing.codeStatus, codeBatchText)}>
                                                         查询
                                                     </Button>
                                                 </Space>
@@ -254,6 +291,11 @@ export default function AdminMarketingPage() {
                                         headerTitle={<Typography.Text strong>兑换码列表</Typography.Text>}
                                         options={{ density: true, setting: true, reload: () => marketing.refresh() }}
                                         toolBarRender={() => [
+                                            ...(marketing.lastGeneratedCodes.length ? [
+                                                <Button key="last" icon={<CopyOutlined />} onClick={() => setIsGeneratedModalOpen(true)}>
+                                                    最近生成
+                                                </Button>
+                                            ] : []),
                                             <Button key="copy" icon={<CopyOutlined />} onClick={() => copyUnusedCodes(marketing.codes, message)}>
                                                 复制未使用码
                                             </Button>,
@@ -354,6 +396,26 @@ export default function AdminMarketingPage() {
                     </Row>
                 </Form>
             </Modal>
+
+            <Modal
+                title="最近生成的兑换码"
+                open={isGeneratedModalOpen}
+                width={620}
+                onCancel={() => setIsGeneratedModalOpen(false)}
+                footer={[
+                    <Button key="clear" onClick={() => marketing.clearLastGeneratedCodes()}>
+                        清空
+                    </Button>,
+                    <Button key="copy" type="primary" icon={<CopyOutlined />} onClick={() => copyText(marketing.lastGeneratedCodes.join("\n"), message, "最近生成的兑换码已复制")}>
+                        复制全部
+                    </Button>,
+                ]}
+            >
+                <Flex vertical gap={12}>
+                    <Typography.Text type="secondary">本批次兑换码可直接复制，关闭后可在兑换码列表中按批次检索。</Typography.Text>
+                    <Input.TextArea value={marketing.lastGeneratedCodes.join("\n")} rows={Math.min(12, Math.max(4, marketing.lastGeneratedCodes.length))} readOnly />
+                </Flex>
+            </Modal>
         </main>
     );
 }
@@ -368,6 +430,14 @@ function copyUnusedCodes(codes: AdminRedemptionCode[], message: { success: (cont
         message.warning("当前列表没有未使用兑换码");
         return;
     }
+    copyText(text, message, "未使用兑换码已复制");
+}
+
+function copyText(text: string, message: { success: (content: string) => void; warning: (content: string) => void }, successText: string) {
+    if (!text) {
+        message.warning("没有可复制内容");
+        return;
+    }
     void navigator.clipboard.writeText(text);
-    message.success("未使用兑换码已复制");
+    message.success(successText);
 }

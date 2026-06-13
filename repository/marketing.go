@@ -72,6 +72,14 @@ func ListRedemptionCodes(q model.Query) ([]model.RedemptionCode, int64, error) {
 	if q.Type != "" {
 		tx = tx.Where("type = ?", q.Type)
 	}
+	if q.Status == "used" {
+		tx = tx.Where("used = ?", true)
+	} else if q.Status == "unused" {
+		tx = tx.Where("used = ?", false)
+	}
+	if q.BatchID != "" {
+		tx = tx.Where("batch_id = ?", q.BatchID)
+	}
 	var total int64
 	if err := tx.Count(&total).Error; err != nil {
 		return nil, 0, err

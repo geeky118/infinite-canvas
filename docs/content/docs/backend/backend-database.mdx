@@ -178,7 +178,7 @@ description: 当前后端主要数据表与字段说明
 
 | 字段 | 类型 | 说明 |
 | --- | --- | --- |
-| `enabled` | bool | 是否开启定时同步，默认开启 |
+| `enabled` | bool | 是否开启定时同步，默认关闭；服务端还需要开启 `PROMPT_SYNC_SCHEDULER_ENABLED=true` |
 | `cron` | string | Cron 表达式，默认每 5 分钟 |
 
 `auth.linuxDo` 当前字段：
@@ -192,7 +192,7 @@ description: 当前后端主要数据表与字段说明
 
 ### credit_logs
 
-用户算力点变更流水表。当前记录后台手动调整、模型调用预扣、模型调用失败返还、注册奖励、每日领取和兑换码兑换。
+用户算力点变更与营销权益审计流水表。当前记录后台手动调整、模型调用预扣、模型调用失败返还、注册奖励、每日领取和兑换码兑换；订阅兑换会写入 `amount = 0` 的审计记录，便于后台核对兑换行为。
 
 | 字段 | 类型 | 说明 |
 | --- | --- | --- |
@@ -215,7 +215,7 @@ description: 当前后端主要数据表与字段说明
 | `ai_refund` | 后端模型接口调用失败返还 |
 | `register_reward` | 新用户注册奖励 |
 | `daily_reward` | 每日领取奖励 |
-| `redeem_code` | 兑换码兑换点数 |
+| `redeem_code` | 兑换码兑换点数或订阅 |
 
 ### subscription_plans
 
@@ -250,6 +250,8 @@ description: 当前后端主要数据表与字段说明
 | `used_at` | string | 使用时间 |
 | `created_at` | string | 创建时间 |
 | `updated_at` | string | 更新时间 |
+
+后台列表支持按 `type`、`used` 状态、`batch_id` 和关键词筛选，用于核对单个生成批次和未使用兑换码。
 
 ### daily_reward_claims
 

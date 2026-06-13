@@ -56,6 +56,7 @@ func New() *gin.Engine {
 	api.POST("/admin/login", gin.WrapF(handler.AdminLogin))
 
 	admin := api.Group("/admin", middleware.AdminAuth)
+	admin.GET("/overview", gin.WrapF(handler.AdminOverview))
 	admin.GET("/users", gin.WrapF(handler.AdminUsers))
 	admin.POST("/users", gin.WrapF(handler.AdminSaveUser))
 	admin.POST("/users/:id/credits", func(c *gin.Context) {
