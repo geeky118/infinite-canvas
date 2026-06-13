@@ -27,7 +27,7 @@ export function PromptCard({
     return (
         <Card
             hoverable
-            className="overflow-hidden"
+            className="overflow-hidden border-blue-100 dark:border-sky-400/[0.12]"
             styles={{ body: { padding: 0 } }}
             cover={
                 <button type="button" className="block w-full text-left" onClick={onOpen}>
@@ -38,10 +38,10 @@ export function PromptCard({
             <button type="button" className="block w-full text-left" onClick={onOpen}>
                 <div className="p-4">
                     <div className="flex items-start justify-between gap-3">
-                        <h2 className="line-clamp-1 text-sm font-semibold text-stone-950 dark:text-stone-100">{item.title}</h2>
-                        <span className="shrink-0 text-xs text-stone-400 dark:text-stone-500">{formatPromptDate(item.updatedAt)}</span>
+                        <h2 className="line-clamp-1 text-sm font-semibold text-slate-950 dark:text-sky-50">{item.title}</h2>
+                        <span className="shrink-0 text-xs text-slate-400 dark:text-sky-100/[0.42]">{formatPromptDate(item.updatedAt)}</span>
                     </div>
-                    <p className="mt-2 line-clamp-3 text-xs leading-5 text-stone-600 dark:text-stone-400">{item.prompt}</p>
+                    <p className="mt-2 line-clamp-3 text-xs leading-5 text-slate-600 dark:text-sky-100/[0.62]">{item.prompt}</p>
                     <div className="mt-3 flex flex-wrap gap-1.5">
                         {item.tags.map((tag) => (
                             <Tag key={tag} className="m-0 text-[11px]">

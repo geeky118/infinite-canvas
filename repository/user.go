@@ -70,6 +70,15 @@ func GetUserByUsername(username string) (model.User, bool, error) {
 	return findUser(db, "username = ?", username)
 }
 
+// GetUserByEmail 根据邮箱查询用户；邮箱为空的部署可用用户名兜底。
+func GetUserByEmail(email string) (model.User, bool, error) {
+	db, err := DB()
+	if err != nil {
+		return model.User{}, false, err
+	}
+	return findUser(db, "email = ? OR username = ?", email, email)
+}
+
 // SaveUser 保存用户信息。
 func SaveUser(user model.User) (model.User, error) {
 	db, err := DB()
@@ -137,15 +146,52 @@ func ListCreditLogs(q model.Query) ([]model.CreditLog, int64, error) {
 	tx := db.Model(&model.CreditLog{})
 	if keyword := strings.TrimSpace(q.Keyword); keyword != "" {
 		like := "%" + keyword + "%"
-		tx = tx.Where("user_id LIKE ? OR type LIKE ? OR remark LIKE ? OR related_id LIKE ?", like, like, like, like)
+		tx = tx.Joins("LEFT JOIN users ON users.id = credit_logs.user_id").
+			Where("credit_logs.user_id LIKE ? OR users.email LIKE ? OR users.username LIKE ? OR credit_logs.type LIKE ? OR credit_logs.remark LIKE ? OR credit_logs.related_id LIKE ?", like, like, like, like, like, like)
 	}
 	var total int64
 	if err := tx.Count(&total).Error; err != nil {
 		return nil, 0, err
 	}
 	var logs []model.CreditLog
-	err = tx.Order("created_at desc").Offset(q.Offset()).Limit(q.PageSize).Find(&logs).Error
-	return logs, total, err
+	if err := tx.Order("credit_logs.created_at desc").Offset(q.Offset()).Limit(q.PageSize).Find(&logs).Error; err != nil {
+		return nil, 0, err
+	}
+	return logs, total, fillCreditLogUserEmails(db, logs)
+}
+
+func fillCreditLogUserEmails(db *gorm.DB, logs []model.CreditLog) error {
+	if len(logs) == 0 {
+		return nil
+	}
+	ids := make([]string, 0, len(logs))
+	seen := map[string]bool{}
+	for _, log := range logs {
+		if log.UserID == "" || seen[log.UserID] {
+			continue
+		}
+		seen[log.UserID] = true
+		ids = append(ids, log.UserID)
+	}
+	if len(ids) == 0 {
+		return nil
+	}
+	var users []model.User
+	if err := db.Select("id", "username", "email").Where("id IN ?", ids).Find(&users).Error; err != nil {
+		return err
+	}
+	emails := map[string]string{}
+	for _, user := range users {
+		email := strings.TrimSpace(user.Email)
+		if email == "" {
+			email = user.Username
+		}
+		emails[user.ID] = email
+	}
+	for i := range logs {
+		logs[i].UserEmail = emails[logs[i].UserID]
+	}
+	return nil
 }
 
 func DeleteCreditLog(id string) error {

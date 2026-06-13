@@ -5,6 +5,7 @@
   "pages": [
     "quick-start",
     "features",
+    "user-interface-design-system",
     "render",
     "docker",
     "third-party-prompt-repositories",

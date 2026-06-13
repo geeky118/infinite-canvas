@@ -1,0 +1,95 @@
+{
+  "nav": [
+    {
+      "name": "我的画布",
+      "route": "/canvas",
+      "href": "/canvas",
+      "linkOk": true
+    },
+    {
+      "name": "生图工作台",
+      "route": "/image",
+      "href": "/image",
+      "linkOk": true
+    },
+    {
+      "name": "视频创作台",
+      "route": "/video",
+      "href": "/video",
+      "linkOk": true
+    },
+    {
+      "name": "提示词库",
+      "route": "/prompts",
+      "href": "/prompts",
+      "linkOk": true
+    },
+    {
+      "name": "我的素材",
+      "route": "/assets",
+      "href": "/assets",
+      "linkOk": true
+    }
+  ],
+  "routeLoads": [
+    {
+      "route": "/canvas",
+      "expectedH1": "无限画布",
+      "actualH1": "无限画布",
+      "ok": true
+    },
+    {
+      "route": "/image",
+      "expectedH1": "生图工作台",
+      "actualH1": "生图工作台",
+      "ok": true
+    },
+    {
+      "route": "/video",
+      "expectedH1": "视频创作台",
+      "actualH1": "视频创作台",
+      "ok": true
+    },
+    {
+      "route": "/prompts",
+      "expectedH1": "提示词中心",
+      "actualH1": "提示词中心",
+      "ok": true
+    },
+    {
+      "route": "/assets",
+      "expectedH1": "我的素材",
+      "actualH1": "我的素材",
+      "ok": true
+    }
+  ],
+  "drawer": {
+    "visible": true,
+    "containsCanvas": true,
+    "containsImage": true,
+    "containsVideo": true,
+    "containsPrompts": true,
+    "containsAssets": true,
+    "metrics": {
+      "text": "导航我的画布生图工作台视频创作台提示词库我的素材",
+      "drawerRect": {
+        "x": 0,
+        "y": 0,
+        "w": 390,
+        "h": 844
+      },
+      "wrapperRect": {
+        "x": -269,
+        "y": 0,
+        "w": 280,
+        "h": 844
+      },
+      "sectionBg": "rgb(16, 29, 43)",
+      "bodyBg": "rgb(7, 21, 36)",
+      "overflow": false
+    },
+    "clickImageOk": true
+  },
+  "errors": [],
+  "failures": []
+}

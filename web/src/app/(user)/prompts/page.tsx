@@ -48,15 +48,15 @@ export default function PromptsPage() {
     };
 
     return (
-        <div className="flex h-full flex-col overflow-hidden bg-background text-stone-800 dark:text-stone-100">
+        <div className="flex h-full flex-col overflow-hidden bg-background text-slate-800 dark:text-sky-50">
             <main
-                className="min-h-0 flex-1 overflow-y-auto bg-background bg-[radial-gradient(#e5e7eb_1px,transparent_1px)] px-6 py-8 [background-size:16px_16px] dark:bg-[radial-gradient(rgba(245,245,244,.16)_1px,transparent_1px)]"
+                className="brand-app-bg brand-grid-bg min-h-0 flex-1 overflow-y-auto px-6 py-8"
                 onScroll={handleListScroll}
             >
                 <div className="pb-8">
                     <div className="mx-auto max-w-5xl text-center">
-                        <h1 className="text-4xl font-semibold tracking-tight text-stone-950 dark:text-stone-100">提示词中心</h1>
-                        <p className="mt-3 text-sm text-stone-500 dark:text-stone-400">共 {totalPrompts} 条提示词，按标题、标签与分类快速查找灵感。</p>
+                        <h1 className="text-4xl font-semibold tracking-tight text-slate-950 dark:text-sky-50">提示词中心</h1>
+                        <p className="mt-3 text-sm text-slate-500 dark:text-sky-100/[0.62]">共 {totalPrompts} 条提示词，按标题、标签与分类快速查找灵感。</p>
                     </div>
                     {query.isLoading ? (
                         <div className="flex h-60 items-center justify-center">
@@ -72,7 +72,7 @@ export default function PromptsPage() {
                                 <div className="mx-auto mt-6 grid max-w-6xl gap-3 text-left">
                                     {hasPromptCategories ? (
                                         <div className="grid gap-2 sm:grid-cols-[56px_minmax(0,1fr)] sm:items-start">
-                                            <div className="pt-2 text-xs font-medium text-stone-500 dark:text-stone-400">分类</div>
+                                            <div className="pt-2 text-xs font-medium text-slate-500 dark:text-sky-100/[0.62]">分类</div>
                                             <div className="flex flex-wrap gap-2">
                                                 {promptCategoryOptions.map((category) => (
                                                     <Tag.CheckableTag key={category} checked={selectedCategory === category} className={cn("prompt-filter-tag", selectedCategory === category && "is-active")} onChange={() => setSelectedCategory(category)}>
@@ -84,7 +84,7 @@ export default function PromptsPage() {
                                     ) : null}
                                     {hasPromptTags ? (
                                         <div className="grid gap-2 sm:grid-cols-[56px_minmax(0,1fr)] sm:items-start">
-                                            <div className="pt-2 text-xs font-medium text-stone-500 dark:text-stone-400">标签</div>
+                                            <div className="pt-2 text-xs font-medium text-slate-500 dark:text-sky-100/[0.62]">标签</div>
                                             <div className="flex flex-wrap gap-2">
                                                 {promptTags.map((tag) => (
                                                     <Tag.CheckableTag
@@ -123,7 +123,7 @@ export default function PromptsPage() {
                             ))}
                         </div>
                         {promptItems.length === 0 ? <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="没有找到匹配的提示词" className="py-16" /> : null}
-                        <div className="mx-auto mt-6 max-w-7xl text-center text-xs text-stone-500 dark:text-stone-400">
+                        <div className="mx-auto mt-6 max-w-7xl text-center text-xs text-slate-500 dark:text-sky-100/[0.62]">
                             {query.isFetchingNextPage ? "加载中..." : query.hasNextPage ? "继续向下滚动加载更多" : promptItems.length > 0 ? "已经到底了" : null}
                         </div>
                     </div>

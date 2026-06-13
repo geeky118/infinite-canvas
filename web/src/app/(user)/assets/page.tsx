@@ -188,12 +188,12 @@ export default function AssetsPage() {
     };
 
     return (
-        <div className="flex h-full flex-col overflow-hidden bg-background text-stone-900 dark:text-stone-100">
-            <main className="min-h-0 flex-1 overflow-y-auto bg-[radial-gradient(#e5e7eb_1px,transparent_1px)] px-6 py-8 [background-size:16px_16px] dark:bg-[radial-gradient(rgba(245,245,244,.14)_1px,transparent_1px)]">
+        <div className="flex h-full flex-col overflow-hidden bg-background text-slate-900 dark:text-sky-50">
+            <main className="brand-app-bg brand-grid-bg min-h-0 flex-1 overflow-y-auto px-6 py-8">
                 <div className="pb-8">
                     <div className="mx-auto max-w-5xl text-center">
-                        <h1 className="text-4xl font-semibold tracking-tight text-stone-950 dark:text-stone-100">我的素材</h1>
-                        <p className="mt-3 text-sm text-stone-500 dark:text-stone-400">收藏常用文本和图片，按类型、标题和标签快速查找。</p>
+                        <h1 className="text-4xl font-semibold tracking-tight text-slate-950 dark:text-sky-50">我的素材</h1>
+                        <p className="mt-3 text-sm text-slate-500 dark:text-sky-100/[0.62]">收藏常用文本和图片，按类型、标题和标签快速查找。</p>
                     </div>
 
                     <div className="mx-auto mt-8 w-full max-w-2xl">
@@ -218,7 +218,7 @@ export default function AssetsPage() {
                     <div className="mx-auto mt-6 grid max-w-6xl gap-3 text-left">
                         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                             <div className="grid gap-2 sm:grid-cols-[56px_minmax(0,1fr)] sm:items-center">
-                                <div className="text-xs font-medium text-stone-500 dark:text-stone-400">类型</div>
+                                <div className="text-xs font-medium text-slate-500 dark:text-sky-100/[0.62]">类型</div>
                                 <div className="flex flex-wrap gap-2">
                                     {kindOptions.map((option) => (
                                         <Tag.CheckableTag
@@ -238,21 +238,21 @@ export default function AssetsPage() {
                             <div className="flex flex-wrap gap-4">
                                 <button
                                     type="button"
-                                    className="cursor-pointer text-sm font-medium text-stone-700 underline-offset-4 hover:underline focus-visible:outline-none focus-visible:underline dark:text-stone-300"
+                                    className="cursor-pointer text-sm font-medium text-blue-700 underline-offset-4 hover:underline focus-visible:outline-none focus-visible:underline dark:text-sky-200"
                                     onClick={() => void exportAllAssets()}
                                 >
                                     导出素材
                                 </button>
                                 <button
                                     type="button"
-                                    className="cursor-pointer text-sm font-medium text-stone-700 underline-offset-4 hover:underline focus-visible:outline-none focus-visible:underline dark:text-stone-300"
+                                    className="cursor-pointer text-sm font-medium text-blue-700 underline-offset-4 hover:underline focus-visible:outline-none focus-visible:underline dark:text-sky-200"
                                     onClick={() => assetInputRef.current?.click()}
                                 >
                                     导入素材
                                 </button>
                                 <button
                                     type="button"
-                                    className="cursor-pointer text-sm font-medium text-stone-700 underline-offset-4 hover:underline focus-visible:outline-none focus-visible:underline dark:text-stone-300"
+                                    className="cursor-pointer text-sm font-medium text-blue-700 underline-offset-4 hover:underline focus-visible:outline-none focus-visible:underline dark:text-sky-200"
                                     onClick={openCreate}
                                 >
                                     新增素材

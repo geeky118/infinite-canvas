@@ -1,7 +1,7 @@
 "use client";
 
-import { ArrowRight } from "lucide-react";
-import { type ReactNode, useEffect, useState } from "react";
+import { ArrowRight, ImagePlus, Layers3, Sparkles, Video } from "lucide-react";
+import { useEffect, useState } from "react";
 import { App, Button, Tag } from "antd";
 
 import { PromptDetailDialog } from "@/components/prompts/prompt-detail-dialog";
@@ -10,19 +10,6 @@ import { navigationTools } from "@/constant/navigation-tools";
 import { useCopyText } from "@/hooks/use-copy-text";
 import { cn } from "@/lib/utils";
 import { promptImageUrl, usePromptFallbackImage } from "@/components/prompts/prompt-image";
-
-function Highlighter({ action, color, children }: { action: "highlight" | "underline"; color: string; children: ReactNode }) {
-    return (
-        <span className="relative inline-block px-1">
-            {action === "highlight" ? (
-                <span className="absolute inset-x-0 bottom-0 top-1 rounded-sm opacity-45" style={{ backgroundColor: color }} />
-            ) : (
-                <span className="absolute inset-x-0 bottom-0 h-1 rounded-full opacity-80" style={{ backgroundColor: color }} />
-            )}
-            <span className="relative font-medium text-stone-800 dark:text-stone-200">{children}</span>
-        </span>
-    );
-}
 
 export default function IndexPage() {
     const { message } = App.useApp();
@@ -38,40 +25,67 @@ export default function IndexPage() {
     }, [message]);
 
     return (
-        <main className="relative h-full overflow-y-auto bg-background bg-[radial-gradient(#e5e7eb_1px,transparent_1px)] [background-size:16px_16px] text-stone-950 dark:bg-[radial-gradient(rgba(245,245,244,.18)_1px,transparent_1px)] dark:text-stone-100">
-            <section className="relative mx-auto min-h-[calc(100vh-4rem)] max-w-7xl overflow-hidden px-6">
-                <div className="pointer-events-none absolute left-[15%] top-24 size-20 rounded-full border border-dashed border-stone-200 dark:border-stone-800" />
-                <div className="pointer-events-none absolute right-[23%] top-[48%] size-20 rounded-full border border-dashed border-stone-200 dark:border-stone-800" />
-
-                <div className="relative flex min-h-[620px] flex-col items-center justify-center pt-10 text-center">
-                    <h1 className="ai-title-aurora max-w-5xl text-balance text-5xl font-semibold tracking-normal sm:text-7xl lg:text-8xl">无限画布</h1>
-                    <p className="mt-8 max-w-3xl text-balance text-lg leading-8 text-stone-500 dark:text-stone-400">
-                        在
-                        <Highlighter action="underline" color="#FF9800">
-                            无限画布
-                        </Highlighter>
-                        中生成、连接和重组
-                        <Highlighter action="highlight" color="#87CEFA">
-                            图片、文字与图形
-                        </Highlighter>
-                        ，让创作从单次生成变成连续推演。
-                    </p>
-                    <div className="mt-10 flex flex-wrap items-center justify-center gap-3">
-                        <Button type="primary" size="large" href={`/${primaryTool.slug}`} icon={<ArrowRight className="size-4" />} iconPlacement="end">
-                            开始使用
-                        </Button>
-                        <Button size="large" href="/canvas">
-                            打开画布
-                        </Button>
+        <main className="brand-app-bg relative h-full overflow-y-auto text-slate-950 dark:text-sky-50">
+            <section className="brand-grid-bg relative mx-auto min-h-[calc(100vh-4rem)] max-w-7xl overflow-hidden px-6">
+                <div className="relative grid min-h-[640px] items-center gap-10 py-12 lg:grid-cols-[minmax(0,1fr)_420px]">
+                    <div className="max-w-4xl">
+                        <div className="mb-7 inline-flex items-center gap-2 rounded-full border border-blue-200/80 bg-white/[0.72] px-3 py-1.5 text-sm font-medium text-blue-700 shadow-sm backdrop-blur dark:border-sky-400/20 dark:bg-sky-400/10 dark:text-sky-200">
+                            <Sparkles className="size-4" />
+                            AI 创作工作流
+                        </div>
+                        <h1 className="ai-title-aurora max-w-5xl text-balance text-5xl font-semibold tracking-normal sm:text-7xl lg:text-8xl">无限画布</h1>
+                        <p className="mt-8 max-w-3xl text-balance text-lg leading-8 text-slate-600 dark:text-sky-100/[0.72]">从提示词、参考图、生成结果到素材沉淀，集中在一张连续画布里完成创意推演。</p>
+                        <div className="mt-10 flex flex-wrap items-center gap-3">
+                            <Button type="primary" size="large" href={`/${primaryTool.slug}`} icon={<ArrowRight className="size-4" />} iconPlacement="end">
+                                进入画布
+                            </Button>
+                            <Button size="large" href="/image">
+                                生图工作台
+                            </Button>
+                        </div>
+                        <div className="mt-10 grid max-w-3xl gap-3 sm:grid-cols-3">
+                            {[
+                                { icon: Layers3, label: "画布编排", value: "节点化" },
+                                { icon: ImagePlus, label: "图像生成", value: "多参考" },
+                                { icon: Video, label: "视频创作", value: "可沉淀" },
+                            ].map((item) => {
+                                const Icon = item.icon;
+                                return (
+                                    <div key={item.label} className="brand-panel rounded-lg px-4 py-3">
+                                        <Icon className="mb-3 size-5 text-blue-600 dark:text-sky-300" />
+                                        <div className="text-sm font-semibold text-slate-950 dark:text-sky-50">{item.label}</div>
+                                        <div className="mt-1 text-xs text-slate-500 dark:text-sky-100/[0.58]">{item.value}</div>
+                                    </div>
+                                );
+                            })}
+                        </div>
+                    </div>
+                    <div className="brand-panel relative hidden overflow-hidden rounded-2xl p-5 lg:block">
+                        <div className="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-blue-500 via-cyan-400 to-blue-600" />
+                        <div className="mb-5 flex items-center gap-3">
+                            <img src="/logo-icon.png" alt="" className="size-14 rounded-xl shadow-[0_14px_30px_rgba(10,132,255,0.3)]" />
+                            <div>
+                                <div className="text-base font-semibold text-slate-950 dark:text-sky-50">创作看板</div>
+                                <div className="text-sm text-slate-500 dark:text-sky-100/60">从灵感到成片</div>
+                            </div>
+                        </div>
+                        <div className="space-y-3">
+                            {["输入提示词", "连接参考图", "生成多版本", "保存到素材"].map((item, index) => (
+                                <div key={item} className="flex items-center gap-3 rounded-lg border border-blue-100 bg-white/[0.72] px-3 py-3 dark:border-sky-400/[0.12] dark:bg-white/[0.04]">
+                                    <span className="grid size-8 place-items-center rounded-md bg-blue-50 text-sm font-semibold text-blue-700 dark:bg-sky-400/[0.12] dark:text-sky-200">{index + 1}</span>
+                                    <span className="text-sm font-medium text-slate-700 dark:text-sky-50/[0.86]">{item}</span>
+                                </div>
+                            ))}
+                        </div>
                     </div>
                 </div>
 
-                <section className="relative mx-auto mb-20 max-w-6xl border-t border-stone-200 pt-12 dark:border-stone-800">
+                <section className="relative mx-auto mb-20 max-w-6xl border-t border-blue-200/70 pt-12 dark:border-sky-400/[0.15]">
                     <div className="mb-8 grid gap-4 md:grid-cols-[1fr_auto_1fr] md:items-start">
                         <div />
                         <div className="max-w-2xl text-center">
-                            <h2 className="text-3xl font-semibold text-stone-950 dark:text-stone-100">沉淀每一次好结果</h2>
-                            <p className="mt-3 text-base leading-7 text-stone-500 dark:text-stone-400">收藏稳定出图的提示词、参考风格和结果图片，让下一次创作从已有经验开始。</p>
+                            <h2 className="text-3xl font-semibold text-slate-950 dark:text-sky-50">提示词与结果资产</h2>
+                            <p className="mt-3 text-base leading-7 text-slate-500 dark:text-sky-100/[0.62]">把稳定可复用的提示词、参考风格和生成结果保存在同一套创作资产里。</p>
                         </div>
                         <Button type="link" href="/prompts" className="justify-self-center md:justify-self-end" icon={<ArrowRight className="size-4" />} iconPlacement="end">
                             查看提示词库
@@ -84,7 +98,7 @@ export default function IndexPage() {
                                 type="button"
                                 onClick={() => setSelectedPrompt(item)}
                                 className={cn(
-                                    "group relative cursor-pointer overflow-hidden border border-stone-200 bg-stone-100 text-left dark:border-stone-800 dark:bg-stone-900",
+                                    "group relative cursor-pointer overflow-hidden rounded-lg border border-blue-100 bg-white text-left shadow-sm transition hover:-translate-y-0.5 hover:shadow-lg dark:border-sky-400/[0.12] dark:bg-white/[0.04]",
                                     index === 0 && "md:col-span-2 md:row-span-2",
                                     index === 3 && "md:col-span-2",
                                 )}

@@ -117,6 +117,7 @@ const (
 type CreditLog struct {
 	ID        string        `json:"id" gorm:"primaryKey"`
 	UserID    string        `json:"userId" gorm:"index"`
+	UserEmail string        `json:"userEmail" gorm:"-"`
 	Type      CreditLogType `json:"type"`
 	Amount    int           `json:"amount"`
 	Balance   int           `json:"balance"`

@@ -1,0 +1,383 @@
+{
+  "pages": [
+    {
+      "route": "/",
+      "label": "home",
+      "theme": "dark",
+      "viewport": {
+        "width": 1440,
+        "height": 1000
+      },
+      "metrics": {
+        "dark": true,
+        "colorScheme": "dark",
+        "bodyBg": "rgb(6, 19, 32)",
+        "bodyColor": "rgb(234, 245, 255)",
+        "h1": "无限画布",
+        "clientWidth": 1440,
+        "scrollWidth": 1440,
+        "horizontalOverflow": false,
+        "logoImages": [
+          {
+            "src": "/logo-64.png",
+            "ok": true,
+            "w": 64,
+            "h": 64
+          },
+          {
+            "src": "/logo-icon.png",
+            "ok": true,
+            "w": 256,
+            "h": 256
+          },
+          {
+            "src": "/logo.svg",
+            "ok": true,
+            "w": 64,
+            "h": 64
+          },
+          {
+            "src": "/logo.svg",
+            "ok": true,
+            "w": 64,
+            "h": 64
+          },
+          {
+            "src": "/logo.svg",
+            "ok": true,
+            "w": 64,
+            "h": 64
+          },
+          {
+            "src": "/logo.svg",
+            "ok": true,
+            "w": 64,
+            "h": 64
+          }
+        ],
+        "badBoxes": []
+      }
+    },
+    {
+      "route": "/login",
+      "label": "login",
+      "theme": "dark",
+      "viewport": {
+        "width": 1440,
+        "height": 1000
+      },
+      "metrics": {
+        "dark": true,
+        "colorScheme": "dark",
+        "bodyBg": "rgb(6, 19, 32)",
+        "bodyColor": "rgb(234, 245, 255)",
+        "h1": "账号登录",
+        "clientWidth": 1440,
+        "scrollWidth": 1440,
+        "horizontalOverflow": false,
+        "logoImages": [
+          {
+            "src": "/logo-64.png",
+            "ok": true,
+            "w": 64,
+            "h": 64
+          },
+          {
+            "src": "/logo-icon.png",
+            "ok": true,
+            "w": 256,
+            "h": 256
+          }
+        ],
+        "badBoxes": []
+      }
+    },
+    {
+      "route": "/canvas",
+      "label": "canvas",
+      "theme": "dark",
+      "viewport": {
+        "width": 1440,
+        "height": 1000
+      },
+      "metrics": {
+        "dark": true,
+        "colorScheme": "dark",
+        "bodyBg": "rgb(6, 19, 32)",
+        "bodyColor": "rgb(234, 245, 255)",
+        "h1": "无限画布",
+        "clientWidth": 1440,
+        "scrollWidth": 1440,
+        "horizontalOverflow": false,
+        "logoImages": [
+          {
+            "src": "/logo-64.png",
+            "ok": true,
+            "w": 64,
+            "h": 64
+          }
+        ],
+        "badBoxes": []
+      }
+    },
+    {
+      "route": "/image",
+      "label": "image",
+      "theme": "dark",
+      "viewport": {
+        "width": 1440,
+        "height": 1000
+      },
+      "metrics": {
+        "dark": true,
+        "colorScheme": "dark",
+        "bodyBg": "rgb(6, 19, 32)",
+        "bodyColor": "rgb(234, 245, 255)",
+        "h1": "生图工作台",
+        "clientWidth": 1440,
+        "scrollWidth": 1440,
+        "horizontalOverflow": false,
+        "logoImages": [
+          {
+            "src": "/logo-64.png",
+            "ok": true,
+            "w": 64,
+            "h": 64
+          }
+        ],
+        "badBoxes": []
+      }
+    },
+    {
+      "route": "/video",
+      "label": "video",
+      "theme": "dark",
+      "viewport": {
+        "width": 1440,
+        "height": 1000
+      },
+      "metrics": {
+        "dark": true,
+        "colorScheme": "dark",
+        "bodyBg": "rgb(6, 19, 32)",
+        "bodyColor": "rgb(234, 245, 255)",
+        "h1": "视频创作台",
+        "clientWidth": 1440,
+        "scrollWidth": 1440,
+        "horizontalOverflow": false,
+        "logoImages": [
+          {
+            "src": "/logo-64.png",
+            "ok": true,
+            "w": 64,
+            "h": 64
+          }
+        ],
+        "badBoxes": []
+      }
+    },
+    {
+      "route": "/prompts",
+      "label": "prompts",
+      "theme": "dark",
+      "viewport": {
+        "width": 1440,
+        "height": 1000
+      },
+      "metrics": {
+        "dark": true,
+        "colorScheme": "dark",
+        "bodyBg": "rgb(6, 19, 32)",
+        "bodyColor": "rgb(234, 245, 255)",
+        "h1": "提示词中心",
+        "clientWidth": 1440,
+        "scrollWidth": 1440,
+        "horizontalOverflow": false,
+        "logoImages": [
+          {
+            "src": "/logo-64.png",
+            "ok": true,
+            "w": 64,
+            "h": 64
+          },
+          {
+            "src": "/logo.svg",
+            "ok": true,
+            "w": 64,
+            "h": 64
+          },
+          {
+            "src": "/logo.svg",
+            "ok": true,
+            "w": 64,
+            "h": 64
+          },
+          {
+            "src": "/logo.svg",
+            "ok": true,
+            "w": 64,
+            "h": 64
+          },
+          {
+            "src": "/logo.svg",
+            "ok": true,
+            "w": 64,
+            "h": 64
+          }
+        ],
+        "badBoxes": []
+      }
+    },
+    {
+      "route": "/assets",
+      "label": "assets",
+      "theme": "dark",
+      "viewport": {
+        "width": 1440,
+        "height": 1000
+      },
+      "metrics": {
+        "dark": true,
+        "colorScheme": "dark",
+        "bodyBg": "rgb(6, 19, 32)",
+        "bodyColor": "rgb(234, 245, 255)",
+        "h1": "我的素材",
+        "clientWidth": 1440,
+        "scrollWidth": 1440,
+        "horizontalOverflow": false,
+        "logoImages": [
+          {
+            "src": "/logo-64.png",
+            "ok": true,
+            "w": 64,
+            "h": 64
+          }
+        ],
+        "badBoxes": []
+      }
+    },
+    {
+      "route": "/",
+      "label": "home",
+      "theme": "light",
+      "viewport": {
+        "width": 1440,
+        "height": 1000
+      },
+      "metrics": {
+        "dark": false,
+        "colorScheme": "light",
+        "bodyBg": "rgb(245, 250, 255)",
+        "bodyColor": "rgb(11, 23, 36)",
+        "h1": "无限画布",
+        "clientWidth": 1440,
+        "scrollWidth": 1440,
+        "horizontalOverflow": false,
+        "logoImages": [
+          {
+            "src": "/logo-64.png",
+            "ok": true,
+            "w": 64,
+            "h": 64
+          },
+          {
+            "src": "/logo-icon.png",
+            "ok": true,
+            "w": 256,
+            "h": 256
+          }
+        ],
+        "badBoxes": []
+      }
+    },
+    {
+      "route": "/image",
+      "label": "image",
+      "theme": "light",
+      "viewport": {
+        "width": 1440,
+        "height": 1000
+      },
+      "metrics": {
+        "dark": false,
+        "colorScheme": "light",
+        "bodyBg": "rgb(245, 250, 255)",
+        "bodyColor": "rgb(11, 23, 36)",
+        "h1": "生图工作台",
+        "clientWidth": 1440,
+        "scrollWidth": 1440,
+        "horizontalOverflow": false,
+        "logoImages": [
+          {
+            "src": "/logo-64.png",
+            "ok": true,
+            "w": 64,
+            "h": 64
+          }
+        ],
+        "badBoxes": []
+      }
+    },
+    {
+      "route": "/",
+      "label": "home-mobile",
+      "theme": "dark",
+      "viewport": {
+        "width": 390,
+        "height": 844
+      },
+      "metrics": {
+        "dark": true,
+        "colorScheme": "dark",
+        "bodyBg": "rgb(6, 19, 32)",
+        "bodyColor": "rgb(234, 245, 255)",
+        "h1": "无限画布",
+        "clientWidth": 390,
+        "scrollWidth": 390,
+        "horizontalOverflow": false,
+        "logoImages": [
+          {
+            "src": "/logo-64.png",
+            "ok": true,
+            "w": 64,
+            "h": 64
+          },
+          {
+            "src": "/logo-icon.png",
+            "ok": true,
+            "w": 256,
+            "h": 256
+          },
+          {
+            "src": "/logo.svg",
+            "ok": true,
+            "w": 64,
+            "h": 64
+          },
+          {
+            "src": "/logo.svg",
+            "ok": true,
+            "w": 64,
+            "h": 64
+          },
+          {
+            "src": "/logo.svg",
+            "ok": true,
+            "w": 64,
+            "h": 64
+          },
+          {
+            "src": "/logo.svg",
+            "ok": true,
+            "w": 64,
+            "h": 64
+          }
+        ],
+        "badBoxes": []
+      }
+    }
+  ],
+  "errors": [],
+  "pageErrors": [],
+  "failures": []
+}

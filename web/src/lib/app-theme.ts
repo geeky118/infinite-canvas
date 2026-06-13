@@ -2,30 +2,30 @@ import type { CSSProperties } from "react";
 import type { ThemeConfig } from "antd";
 import { theme as antdTheme } from "antd";
 
-const neutral = {
+const brand = {
     light: {
-        primary: "#171717",
-        primaryHover: "#000000",
+        primary: "#0A84FF",
+        primaryHover: "#006FE6",
         primaryText: "#ffffff",
-        menuBg: "#f5f5f5",
-        menuText: "#171717",
-        selectActiveBg: "#f5f5f5",
-        selectSelectedBg: "#f0f0f0",
-        selectText: "#171717",
-        tableSelectedBg: "rgba(17, 17, 17, 0.05)",
-        tableSelectedHoverBg: "rgba(17, 17, 17, 0.08)",
+        menuBg: "#EAF4FF",
+        menuText: "#0757B8",
+        selectActiveBg: "#F0F7FF",
+        selectSelectedBg: "#E3F1FF",
+        selectText: "#073B8E",
+        tableSelectedBg: "rgba(10, 132, 255, 0.08)",
+        tableSelectedHoverBg: "rgba(10, 132, 255, 0.12)",
     },
     dark: {
-        primary: "#fafafa",
-        primaryHover: "#ffffff",
-        primaryText: "#171717",
-        menuBg: "#262626",
-        menuText: "#fafafa",
-        selectActiveBg: "#262626",
-        selectSelectedBg: "#333333",
-        selectText: "#fafafa",
-        tableSelectedBg: "rgba(255, 255, 255, 0.08)",
-        tableSelectedHoverBg: "rgba(255, 255, 255, 0.12)",
+        primary: "#52B5FF",
+        primaryHover: "#84CCFF",
+        primaryText: "#04111F",
+        menuBg: "rgba(82, 181, 255, 0.14)",
+        menuText: "#E7F6FF",
+        selectActiveBg: "rgba(82, 181, 255, 0.12)",
+        selectSelectedBg: "rgba(82, 181, 255, 0.18)",
+        selectText: "#F6FBFF",
+        tableSelectedBg: "rgba(82, 181, 255, 0.12)",
+        tableSelectedHoverBg: "rgba(82, 181, 255, 0.18)",
     },
 };
 
@@ -38,7 +38,7 @@ export const adminLayoutStyle = {
 };
 
 export function getAntThemeConfig(dark: boolean): ThemeConfig {
-    const color = dark ? neutral.dark : neutral.light;
+    const color = dark ? brand.dark : brand.light;
 
     return {
         algorithm: dark ? antdTheme.darkAlgorithm : antdTheme.defaultAlgorithm,
@@ -50,19 +50,29 @@ export function getAntThemeConfig(dark: boolean): ThemeConfig {
             colorLinkHover: color.primaryHover,
             colorLinkActive: color.primary,
             colorTextLightSolid: color.primaryText,
+            borderRadius: 8,
+            borderRadiusLG: 8,
+            colorBgLayout: dark ? "#061320" : "#F5FAFF",
+            colorBgContainer: dark ? "#0B1724" : "#FFFFFF",
+            colorBgElevated: dark ? "#101D2B" : "#FFFFFF",
+            colorBorder: dark ? "rgba(148, 190, 230, 0.18)" : "#D7E7F7",
+            colorText: dark ? "#EAF5FF" : "#0B1724",
+            colorTextSecondary: dark ? "#9EB6CF" : "#536D88",
         },
         components: {
             Button: {
                 primaryShadow: "none",
+                defaultHoverBorderColor: color.primary,
+                defaultHoverColor: color.primary,
             },
             Menu: {
                 itemActiveBg: color.menuBg,
                 itemHoverBg: color.menuBg,
                 itemSelectedBg: color.menuBg,
                 itemSelectedColor: color.menuText,
-                darkItemHoverBg: neutral.dark.menuBg,
-                darkItemSelectedBg: neutral.dark.menuBg,
-                darkItemSelectedColor: neutral.dark.menuText,
+                darkItemHoverBg: brand.dark.menuBg,
+                darkItemSelectedBg: brand.dark.menuBg,
+                darkItemSelectedColor: brand.dark.menuText,
             },
             Select: {
                 optionActiveBg: color.selectActiveBg,

@@ -40,7 +40,7 @@ export function UserStatusActions({ showConfig = true, showVersion = true, varia
     const credits = user?.credits ?? 0;
     const avatarUrl = user?.avatarUrl?.trim();
     const avatarText = (userName.trim()[0] || "U").toUpperCase();
-    const naturalIconClass = "inline-flex size-7 shrink-0 items-center justify-center text-stone-600 transition hover:text-stone-950 dark:text-stone-300 dark:hover:text-white [&_svg]:size-4";
+    const naturalIconClass = "inline-flex size-7 shrink-0 items-center justify-center text-slate-600 transition hover:text-blue-700 dark:text-sky-100/[0.72] dark:hover:text-sky-100 [&_svg]:size-4";
     const iconStyle: CSSProperties | undefined = variant === "canvas" ? { color: canvasTheme.node.text } : undefined;
     const versionStyle = iconStyle;
     const avatarStyle: CSSProperties | undefined = variant === "canvas" ? { borderColor: canvasTheme.toolbar.border, color: canvasTheme.node.text, background: "transparent" } : undefined;
@@ -83,7 +83,7 @@ export function UserStatusActions({ showConfig = true, showVersion = true, varia
                 </button>
             ) : null}
             {!user ? (
-                <Link href="/login" className="px-1.5 text-sm font-medium text-stone-600 underline-offset-4 transition hover:text-stone-950 hover:underline dark:text-stone-300 dark:hover:text-stone-100" style={iconStyle}>
+                <Link href="/login" className="px-1.5 text-sm font-medium text-slate-600 underline-offset-4 transition hover:text-blue-700 hover:underline dark:text-sky-100/[0.72] dark:hover:text-sky-100" style={iconStyle}>
                     登录
                 </Link>
             ) : null}
@@ -95,7 +95,7 @@ export function UserStatusActions({ showConfig = true, showVersion = true, varia
                                 size={24}
                                 src={avatarUrl ? <img src={avatarUrl} alt={userName} referrerPolicy="no-referrer" /> : undefined}
                                 alt={userName}
-                                className="!flex !items-center !justify-center border border-stone-300 bg-transparent text-[11px] font-semibold text-stone-800 transition hover:border-stone-500 hover:text-stone-950 dark:border-stone-700 dark:text-stone-100 dark:hover:border-stone-400 dark:hover:text-white"
+                                className="!flex !items-center !justify-center border border-blue-200 bg-transparent text-[11px] font-semibold text-slate-800 transition hover:border-blue-500 hover:text-blue-700 dark:border-sky-400/25 dark:text-sky-100 dark:hover:border-sky-300 dark:hover:text-white"
                                 style={avatarStyle}
                             >
                                 {avatarText}

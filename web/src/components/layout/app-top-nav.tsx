@@ -21,23 +21,17 @@ export function AppTopNav() {
     return (
         <>
             {!hideHeader ? (
-                <header className="sticky top-0 z-20 h-16 shrink-0 border-b border-stone-200 bg-background/90 backdrop-blur-xl dark:border-stone-800">
+                <header className="sticky top-0 z-20 h-16 shrink-0 border-b border-blue-200/60 bg-white/[0.78] shadow-[0_10px_36px_rgba(7,88,184,0.08)] backdrop-blur-xl dark:border-sky-400/[0.15] dark:bg-[#071524]/[0.78] dark:shadow-[0_12px_42px_rgba(0,0,0,0.28)]">
                     <div className="mx-auto flex h-full max-w-7xl items-stretch justify-between gap-5 px-6">
                         <div className="flex min-w-0 items-center">
-                            <Link href="/" className="flex h-full shrink-0 items-center gap-2 text-sm font-semibold leading-none tracking-tight text-stone-950 transition hover:text-stone-600 dark:text-stone-100 dark:hover:text-stone-300">
-                                <span
-                                    className="size-5 shrink-0 bg-current"
-                                    style={{
-                                        mask: "url(/logo.svg) center / contain no-repeat",
-                                        WebkitMask: "url(/logo.svg) center / contain no-repeat",
-                                    }}
-                                />
-                                <span className="text-base font-medium">无限画布</span>
+                            <Link href="/" className="flex h-full shrink-0 items-center gap-2 text-sm font-semibold leading-none tracking-tight text-slate-950 transition hover:text-blue-700 dark:text-sky-50 dark:hover:text-sky-200">
+                                <img src="/logo-64.png" alt="无限画布" className="size-8 shrink-0 rounded-lg shadow-[0_8px_18px_rgba(10,132,255,0.28)]" />
+                                <span className="text-base font-semibold">无限画布</span>
                             </Link>
 
                             <button
                                 type="button"
-                                className="ml-3 inline-flex size-8 shrink-0 items-center justify-center text-stone-600 transition hover:text-stone-950 md:hidden dark:text-stone-300 dark:hover:text-white"
+                                className="ml-3 inline-flex size-8 shrink-0 items-center justify-center text-slate-600 transition hover:text-blue-700 md:hidden dark:text-sky-200 dark:hover:text-white"
                                 onClick={() => setMobileNavOpen(true)}
                                 aria-label="打开导航菜单"
                                 title="导航菜单"
@@ -56,8 +50,8 @@ export function AppTopNav() {
                                             className={cn(
                                                 "relative flex h-16 shrink-0 items-center gap-2 text-sm leading-6 transition after:absolute after:inset-x-0 after:bottom-0 after:h-px",
                                                 active
-                                                    ? "font-medium text-stone-950 after:bg-stone-950 dark:text-stone-100 dark:after:bg-stone-100"
-                                                    : "text-stone-500 after:bg-transparent hover:text-stone-950 dark:text-stone-400 dark:hover:text-stone-100",
+                                                    ? "font-medium text-blue-700 after:bg-blue-600 dark:text-sky-200 dark:after:bg-sky-300"
+                                                    : "text-slate-500 after:bg-transparent hover:text-blue-700 dark:text-sky-100/[0.62] dark:hover:text-sky-100",
                                             )}
                                         >
                                             <Icon className="size-4" />

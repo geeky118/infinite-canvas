@@ -39,6 +39,7 @@ export type AdminUserListResponse = {
 export type AdminCreditLog = {
     id: string;
     userId: string;
+    userEmail: string;
     type: string;
     amount: number;
     balance: number;

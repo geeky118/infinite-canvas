@@ -41,10 +41,10 @@ export default function AdminCreditLogsPage() {
 
     const columns: ProColumns<AdminCreditLog>[] = [
         {
-            title: "用户 ID",
-            dataIndex: "userId",
+            title: "用户邮箱",
+            dataIndex: "userEmail",
             width: 220,
-            render: (_, item) => <Typography.Text copyable>{item.userId}</Typography.Text>,
+            render: (_, item) => <Typography.Text copyable>{item.userEmail || "-"}</Typography.Text>,
         },
         {
             title: "类型",
@@ -101,7 +101,7 @@ export default function AdminCreditLogsPage() {
                         <Row gutter={16} align="bottom">
                             <Col flex="360px">
                                 <Form.Item label="关键词">
-                                    <Input.Search value={keywordText} placeholder="搜索用户 ID、类型、备注或关联 ID" allowClear enterButton={<SearchOutlined />} onSearch={() => searchLogs(keywordText)} onChange={(event) => setKeywordText(event.target.value)} />
+                                    <Input.Search value={keywordText} placeholder="搜索用户邮箱、类型、备注或关联 ID" allowClear enterButton={<SearchOutlined />} onSearch={() => searchLogs(keywordText)} onChange={(event) => setKeywordText(event.target.value)} />
                                 </Form.Item>
                             </Col>
                             <Col flex="none">
@@ -161,7 +161,7 @@ export default function AdminCreditLogsPage() {
                 <Form form={form} layout="vertical" requiredMark={false}>
                     <Row gutter={14}>
                         <Col span={12}>
-                            <Form.Item name="userId" label="用户 ID" rules={[{ required: true, message: "请输入用户 ID" }]}>
+                            <Form.Item name="userEmail" label="用户邮箱" rules={[{ required: true, message: "请输入用户邮箱" }]}>
                                 <Input />
                             </Form.Item>
                         </Col>

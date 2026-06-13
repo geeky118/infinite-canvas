@@ -418,6 +418,24 @@ func ListCreditLogs(q model.Query) (model.CreditLogList, error) {
 }
 
 func SaveCreditLog(log model.CreditLog) (model.CreditLog, error) {
+	log.UserEmail = strings.TrimSpace(log.UserEmail)
+	if log.UserEmail != "" {
+		user, ok, err := repository.GetUserByEmail(log.UserEmail)
+		if err != nil {
+			return log, err
+		}
+		if !ok {
+			return log, safeMessageError{message: "用户邮箱不存在"}
+		}
+		log.UserID = user.ID
+		if user.Email != "" {
+			log.UserEmail = user.Email
+		} else {
+			log.UserEmail = user.Username
+		}
+	} else if strings.TrimSpace(log.UserID) == "" {
+		return log, safeMessageError{message: "请输入用户邮箱"}
+	}
 	if log.ID == "" {
 		log.ID = newID("credit")
 		log.CreatedAt = now()
