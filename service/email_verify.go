@@ -85,7 +85,8 @@ func SendEmailCode(email string) (EmailCodeSendResult, error) {
 			if perr == nil {
 				diff := nowTime.Sub(last)
 				if diff < time.Duration(result.Cooldown)*time.Second {
-					remain := int(time.Duration(result.Cooldown)*time.Second.Seconds() - diff.Seconds())
+					cooldown := time.Duration(result.Cooldown) * time.Second
+					remain := int(cooldown.Seconds() - diff.Seconds())
 					if remain < 1 {
 						remain = 1
 					}
