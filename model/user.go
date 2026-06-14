@@ -106,10 +106,10 @@ func PublicUser(user User) AuthUser {
 type EmailVerificationCode struct {
 	ID        string `json:"id" gorm:"primaryKey"`
 	Email     string `json:"email" gorm:"index"`
-	Code      string `json:"code"
+	Code      string `json:"code"`
 	Purpose   string `json:"purpose" gorm:"index;size:32"`
 	ExpiresAt string `json:"expiresAt" gorm:"index"`
-	UsedAt    string `json:"usedAt"
+	UsedAt    string `json:"usedAt"`
 	CreatedAt string `json:"createdAt" gorm:"index"`
 }
 
