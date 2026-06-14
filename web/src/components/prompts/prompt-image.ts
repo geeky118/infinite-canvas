@@ -1,6 +1,8 @@
 "use client";
 
-export const promptFallbackImage = "/brand/creator-hero.png";
+import { BRAND_HERO_IMAGE_URL } from "@/constant/env";
+
+export const promptFallbackImage = BRAND_HERO_IMAGE_URL;
 
 export function promptImageUrl(url: string) {
     if (!url) return promptFallbackImage;

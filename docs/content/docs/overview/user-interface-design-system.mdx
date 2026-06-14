@@ -9,7 +9,7 @@ description: 用户端品牌、色彩、页面和日夜模式规范
 
 - 主 logo 使用 `web/public/logo.png`，小尺寸场景使用 `web/public/logo-icon.png` 或 `web/public/logo-64.png`。
 - 用户端导航、登录、首屏和空状态优先直接展示彩色 logo，不再使用纯色 SVG mask。
-- 首屏产品视觉和提示词缺省封面使用 `web/public/brand/creator-hero.png`，用于承接蓝青色画布、节点和生成资产的品牌识别。
+- 首屏产品视觉和提示词缺省封面统一通过 `web/src/constant/env.ts` 的 `BRAND_HERO_IMAGE_URL` 引用 COS 上预压缩的 WebP 资源（默认 1536x1024，~120KB），本地不再保留同一份资源，避免重复打包。
 - logo 周围需要保留至少 0.25 倍图标宽度的留白，小尺寸显示时保持圆角和轻量阴影。
 
 ## 色彩

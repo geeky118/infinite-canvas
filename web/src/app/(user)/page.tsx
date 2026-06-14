@@ -7,6 +7,7 @@ import { App, Button, Tag } from "antd";
 import { PromptDetailDialog } from "@/components/prompts/prompt-detail-dialog";
 import { fetchPrompts, type Prompt } from "@/services/api/prompts";
 import { navigationTools } from "@/constant/navigation-tools";
+import { BRAND_HERO_IMAGE_URL } from "@/constant/env";
 import { useCopyText } from "@/hooks/use-copy-text";
 import { cn } from "@/lib/utils";
 import { promptImageUrl, usePromptFallbackImage } from "@/components/prompts/prompt-image";
@@ -61,7 +62,7 @@ export default function IndexPage() {
                         </div>
                     </div>
                     <div className="brand-visual-frame relative hidden overflow-hidden rounded-2xl p-4 lg:block">
-                        <img src="/brand/creator-hero.png" alt="" className="aspect-[16/10] w-full rounded-xl object-cover shadow-[0_30px_90px_rgba(3,105,161,0.28)]" />
+                        <img src={BRAND_HERO_IMAGE_URL} alt="" className="aspect-[16/10] w-full rounded-xl object-cover shadow-[0_30px_90px_rgba(3,105,161,0.28)]" />
                         <div className="absolute left-8 top-8 flex items-center gap-3 rounded-lg border border-white/[0.35] bg-white/80 px-3 py-2 shadow-[0_18px_50px_rgba(7,58,119,0.18)] backdrop-blur-xl dark:border-sky-300/20 dark:bg-slate-950/[0.58]">
                             <img src="/logo-icon.png" alt="" className="size-10 rounded-lg shadow-[0_12px_26px_rgba(10,132,255,0.35)]" />
                             <div className="min-w-0">
@@ -99,7 +100,7 @@ export default function IndexPage() {
                         </div>
                     </div>
                     <div className="brand-visual-frame relative overflow-hidden rounded-2xl p-3 lg:hidden">
-                        <img src="/brand/creator-hero.png" alt="" className="aspect-[16/10] w-full rounded-xl object-cover" />
+                        <img src={BRAND_HERO_IMAGE_URL} alt="" className="aspect-[16/10] w-full rounded-xl object-cover" />
                         <div className="absolute bottom-5 left-5 right-5 flex items-center justify-between rounded-lg border border-white/30 bg-white/[0.82] px-3 py-2 text-xs font-semibold text-blue-700 shadow-lg backdrop-blur-xl dark:border-sky-300/[0.18] dark:bg-slate-950/[0.64] dark:text-sky-100">
                             <span>创作画布</span>
                             <ArrowRight className="size-4" />
