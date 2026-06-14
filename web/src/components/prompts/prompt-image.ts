@@ -1,6 +1,6 @@
 "use client";
 
-export const promptFallbackImage = "/logo.svg";
+export const promptFallbackImage = "/brand/creator-hero.png";
 
 export function promptImageUrl(url: string) {
     if (!url) return promptFallbackImage;
@@ -16,6 +16,7 @@ export function promptImageUrl(url: string) {
 }
 
 export function usePromptFallbackImage(event: { currentTarget: HTMLImageElement }) {
-    if (event.currentTarget.src.endsWith(promptFallbackImage)) return;
+    if (event.currentTarget.dataset.fallbackApplied === "true") return;
+    event.currentTarget.dataset.fallbackApplied = "true";
     event.currentTarget.src = promptFallbackImage;
 }

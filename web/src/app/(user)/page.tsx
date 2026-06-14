@@ -1,6 +1,6 @@
 "use client";
 
-import { ArrowRight, ImagePlus, Layers3, Sparkles, Video } from "lucide-react";
+import { ArrowRight, ImagePlus, Layers3, Sparkles, Video, WandSparkles } from "lucide-react";
 import { useEffect, useState } from "react";
 import { App, Button, Tag } from "antd";
 
@@ -27,7 +27,7 @@ export default function IndexPage() {
     return (
         <main className="brand-app-bg relative h-full overflow-y-auto text-slate-950 dark:text-sky-50">
             <section className="brand-grid-bg relative mx-auto min-h-[calc(100vh-4rem)] max-w-7xl overflow-hidden px-6">
-                <div className="relative grid min-h-[640px] items-center gap-10 py-12 lg:grid-cols-[minmax(0,1fr)_420px]">
+                <div className="relative grid min-h-[640px] items-center gap-10 py-12 lg:grid-cols-[minmax(0,1fr)_480px]">
                     <div className="max-w-4xl">
                         <div className="mb-7 inline-flex items-center gap-2 rounded-full border border-blue-200/80 bg-white/[0.72] px-3 py-1.5 text-sm font-medium text-blue-700 shadow-sm backdrop-blur dark:border-sky-400/20 dark:bg-sky-400/10 dark:text-sky-200">
                             <Sparkles className="size-4" />
@@ -43,7 +43,7 @@ export default function IndexPage() {
                                 生图工作台
                             </Button>
                         </div>
-                        <div className="mt-10 grid max-w-3xl gap-3 sm:grid-cols-3">
+                        <div className="mt-8 grid max-w-3xl grid-cols-3 gap-2 sm:mt-10 sm:gap-3">
                             {[
                                 { icon: Layers3, label: "画布编排", value: "节点化" },
                                 { icon: ImagePlus, label: "图像生成", value: "多参考" },
@@ -51,31 +51,58 @@ export default function IndexPage() {
                             ].map((item) => {
                                 const Icon = item.icon;
                                 return (
-                                    <div key={item.label} className="brand-panel rounded-lg px-4 py-3">
-                                        <Icon className="mb-3 size-5 text-blue-600 dark:text-sky-300" />
-                                        <div className="text-sm font-semibold text-slate-950 dark:text-sky-50">{item.label}</div>
-                                        <div className="mt-1 text-xs text-slate-500 dark:text-sky-100/[0.58]">{item.value}</div>
+                                    <div key={item.label} className="brand-panel rounded-lg px-3 py-3 sm:px-4">
+                                        <Icon className="mb-2 size-5 text-blue-600 dark:text-sky-300 sm:mb-3" />
+                                        <div className="truncate text-sm font-semibold text-slate-950 dark:text-sky-50">{item.label}</div>
+                                        <div className="mt-1 truncate text-xs text-slate-500 dark:text-sky-100/[0.58]">{item.value}</div>
                                     </div>
                                 );
                             })}
                         </div>
                     </div>
-                    <div className="brand-panel relative hidden overflow-hidden rounded-2xl p-5 lg:block">
-                        <div className="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-blue-500 via-cyan-400 to-blue-600" />
-                        <div className="mb-5 flex items-center gap-3">
-                            <img src="/logo-icon.png" alt="" className="size-14 rounded-xl shadow-[0_14px_30px_rgba(10,132,255,0.3)]" />
-                            <div>
-                                <div className="text-base font-semibold text-slate-950 dark:text-sky-50">创作看板</div>
-                                <div className="text-sm text-slate-500 dark:text-sky-100/60">从灵感到成片</div>
+                    <div className="brand-visual-frame relative hidden overflow-hidden rounded-2xl p-4 lg:block">
+                        <img src="/brand/creator-hero.png" alt="" className="aspect-[16/10] w-full rounded-xl object-cover shadow-[0_30px_90px_rgba(3,105,161,0.28)]" />
+                        <div className="absolute left-8 top-8 flex items-center gap-3 rounded-lg border border-white/[0.35] bg-white/80 px-3 py-2 shadow-[0_18px_50px_rgba(7,58,119,0.18)] backdrop-blur-xl dark:border-sky-300/20 dark:bg-slate-950/[0.58]">
+                            <img src="/logo-icon.png" alt="" className="size-10 rounded-lg shadow-[0_12px_26px_rgba(10,132,255,0.35)]" />
+                            <div className="min-w-0">
+                                <div className="text-sm font-semibold text-slate-950 dark:text-sky-50">无限画布</div>
+                                <div className="text-xs text-slate-500 dark:text-sky-100/[0.62]">灵感、生成、资产</div>
                             </div>
                         </div>
-                        <div className="space-y-3">
-                            {["输入提示词", "连接参考图", "生成多版本", "保存到素材"].map((item, index) => (
-                                <div key={item} className="flex items-center gap-3 rounded-lg border border-blue-100 bg-white/[0.72] px-3 py-3 dark:border-sky-400/[0.12] dark:bg-white/[0.04]">
-                                    <span className="grid size-8 place-items-center rounded-md bg-blue-50 text-sm font-semibold text-blue-700 dark:bg-sky-400/[0.12] dark:text-sky-200">{index + 1}</span>
-                                    <span className="text-sm font-medium text-slate-700 dark:text-sky-50/[0.86]">{item}</span>
-                                </div>
-                            ))}
+                        <div className="absolute bottom-8 left-8 right-8">
+                            <div className="grid grid-cols-3 gap-2 rounded-xl border border-white/30 bg-white/[0.82] p-2 shadow-[0_20px_60px_rgba(7,58,119,0.2)] backdrop-blur-xl dark:border-sky-300/[0.18] dark:bg-slate-950/[0.64]">
+                                {[
+                                    { icon: WandSparkles, label: "生成" },
+                                    { icon: ImagePlus, label: "参考" },
+                                    { icon: Layers3, label: "沉淀" },
+                                ].map((item) => {
+                                    const Icon = item.icon;
+                                    return (
+                                        <div key={item.label} className="flex items-center justify-center gap-1.5 rounded-lg bg-blue-50/80 px-2 py-2 text-xs font-semibold text-blue-700 dark:bg-sky-400/[0.12] dark:text-sky-100">
+                                            <Icon className="size-3.5" />
+                                            {item.label}
+                                        </div>
+                                    );
+                                })}
+                            </div>
+                        </div>
+                        <div className="absolute right-7 top-24 w-32 rounded-xl border border-white/25 bg-slate-950/[0.48] p-3 text-sky-50 shadow-[0_22px_70px_rgba(2,6,23,0.32)] backdrop-blur-xl">
+                            <div className="mb-3 flex items-center justify-between">
+                                <span className="text-xs font-medium text-sky-100/72">进度</span>
+                                <span className="text-xs font-semibold text-cyan-200">92%</span>
+                            </div>
+                            <div className="space-y-2">
+                                <div className="h-1.5 rounded-full bg-cyan-300/90" />
+                                <div className="h-1.5 w-3/4 rounded-full bg-sky-200/40" />
+                                <div className="h-1.5 w-1/2 rounded-full bg-sky-200/24" />
+                            </div>
+                        </div>
+                    </div>
+                    <div className="brand-visual-frame relative overflow-hidden rounded-2xl p-3 lg:hidden">
+                        <img src="/brand/creator-hero.png" alt="" className="aspect-[16/10] w-full rounded-xl object-cover" />
+                        <div className="absolute bottom-5 left-5 right-5 flex items-center justify-between rounded-lg border border-white/30 bg-white/[0.82] px-3 py-2 text-xs font-semibold text-blue-700 shadow-lg backdrop-blur-xl dark:border-sky-300/[0.18] dark:bg-slate-950/[0.64] dark:text-sky-100">
+                            <span>创作画布</span>
+                            <ArrowRight className="size-4" />
                         </div>
                     </div>
                 </div>
