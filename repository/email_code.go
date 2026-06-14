@@ -7,14 +7,11 @@ import (
 	"gorm.io/gorm"
 )
 
-// CreateEmailCode 写入一条新验证码。
+// CreateEmailCode 写入一条新验证码，ID 由调用方生成。
 func CreateEmailCode(code model.EmailVerificationCode) (model.EmailVerificationCode, error) {
 	db, err := DB()
 	if err != nil {
 		return code, err
-	}
-	if code.ID == "" {
-		code.ID = "emailcode-" + time.Now().Format("20060102150405.000000000")
 	}
 	return code, db.Create(&code).Error
 }

@@ -85,7 +85,11 @@ func SendEmailCode(email string) (EmailCodeSendResult, error) {
 			if perr == nil {
 				diff := nowTime.Sub(last)
 				if diff < time.Duration(result.Cooldown)*time.Second {
-					return result, safeMessageError{message: fmt.Sprintf("发送太频繁，请 %d 秒后再试", int(time.Duration(result.Cooldown)*time.Second.Seconds()-diff.Seconds()))}
+					remain := int(time.Duration(result.Cooldown)*time.Second.Seconds() - diff.Seconds())
+					if remain < 1 {
+						remain = 1
+					}
+					return result, safeMessageError{message: fmt.Sprintf("发送太频繁，请 %d 秒后再试", remain)}
 				}
 			}
 		}
