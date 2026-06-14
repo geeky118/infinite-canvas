@@ -305,6 +305,7 @@ export type AdminPublicModelChannelSettings = {
     defaultTextModel: string;
     systemPrompt: string;
     allowCustomChannel: boolean;
+    maxConcurrentRequests: number;
 };
 
 export type AdminModelCost = {

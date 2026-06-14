@@ -10,6 +10,7 @@ import (
 	"net/url"
 	"sort"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/basketikun/infinite-canvas/model"
@@ -17,6 +18,14 @@ import (
 )
 
 var adminModelHTTPClient = &http.Client{Timeout: 30 * time.Second}
+
+const defaultMaxConcurrentRequests = 3
+
+var (
+	concurrencyLimitCache     int
+	concurrencyLimitCacheTime time.Time
+	concurrencyLimitCacheMu   sync.Mutex
+)
 
 func PublicSettings() (model.PublicSetting, error) {
 	settings, err := repository.GetSettings()
@@ -38,6 +47,9 @@ func SaveSettings(settings model.Settings) (model.Settings, error) {
 	keepPrivateAuthSecrets(&settings, normalizeSettings(saved))
 	result, err := repository.SaveSettings(settings, now())
 	if err == nil {
+		concurrencyLimitCacheMu.Lock()
+		concurrencyLimitCache = 0
+		concurrencyLimitCacheMu.Unlock()
 		RefreshPromptSyncScheduler()
 	}
 	return hidePrivateAPIKeys(result), err
@@ -93,6 +105,9 @@ func normalizePublicSettingWithChannels(setting model.PublicSetting, channels []
 		enabled := true
 		setting.Auth.AllowRegister = &enabled
 	}
+	if setting.ModelChannel.MaxConcurrentRequests <= 0 {
+		setting.ModelChannel.MaxConcurrentRequests = defaultMaxConcurrentRequests
+	}
 	if setting.Marketing.RegisterCredits < 0 {
 		setting.Marketing.RegisterCredits = 0
 	}
@@ -110,6 +125,38 @@ func normalizePublicSettingWithChannels(setting model.PublicSetting, channels []
 	setting.ModelChannel.DefaultVideoModel = repairDefaultModel(setting.ModelChannel.DefaultVideoModel, setting.ModelChannel.AvailableModels, isVideoModelName)
 	setting.ModelChannel.DefaultModel = repairDefaultModel(setting.ModelChannel.DefaultModel, setting.ModelChannel.AvailableModels, isTextModelName)
 	return setting
+}
+
+// MaxConcurrentRequests 返回当前配置的每用户并发限制，带 5 秒缓存避免频繁查库。
+// 必须在 UserAuth 之后调用（读取缓存或查库均需 context）。
+func MaxConcurrentRequests() int {
+	concurrencyLimitCacheMu.Lock()
+	if concurrencyLimitCache > 0 && time.Since(concurrencyLimitCacheTime) < 5*time.Second {
+		v := concurrencyLimitCache
+		concurrencyLimitCacheMu.Unlock()
+		return v
+	}
+	concurrencyLimitCacheMu.Unlock()
+
+	settings, err := repository.GetSettings()
+	if err != nil {
+		concurrencyLimitCacheMu.Lock()
+		defer concurrencyLimitCacheMu.Unlock()
+		if concurrencyLimitCache > 0 {
+			return concurrencyLimitCache
+		}
+		return defaultMaxConcurrentRequests
+	}
+	limit := settings.Public.ModelChannel.MaxConcurrentRequests
+	if limit <= 0 {
+		limit = defaultMaxConcurrentRequests
+	}
+
+	concurrencyLimitCacheMu.Lock()
+	concurrencyLimitCache = limit
+	concurrencyLimitCacheTime = time.Now()
+	concurrencyLimitCacheMu.Unlock()
+	return limit
 }
 
 func ModelCost(modelName string) (int, error) {

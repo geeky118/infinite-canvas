@@ -35,6 +35,7 @@ const emptySettings: AdminSettings = {
             defaultTextModel: "",
             systemPrompt: "",
             allowCustomChannel: true,
+            maxConcurrentRequests: 3,
         },
         auth: { allowRegister: true, linuxDo: { enabled: false } },
         marketing: { registerCredits: 0, dailyCredits: 0 },
@@ -449,6 +450,11 @@ export default function AdminSettingsPage() {
                                             <Switch />
                                         </Form.Item>
                                     </Col>
+                                    <Col xs={24} md={6}>
+                                        <Form.Item name={["public", "modelChannel", "maxConcurrentRequests"]} label="每用户最大并发请求数" extra="每个用户同时可发起的 AI 请求上限，超过限制的请求会被拒绝">
+                                            <InputNumber min={1} step={1} precision={0} className="!w-full" addonAfter="并发" />
+                                        </Form.Item>
+                                    </Col>
                                     <Col span={24}>
                                         <Form.Item name={["public", "auth", "allowRegister"]} label="是否允许用户注册" extra="关闭后隐藏注册入口，注册接口也会拒绝新用户创建" valuePropName="checked">
                                             <Switch />
@@ -840,6 +846,7 @@ function normalizePublicSetting(setting: Partial<AdminSettings["public"]> = {}):
             ...(setting.modelChannel || {}),
             availableModels: setting.modelChannel?.availableModels || [],
             modelCosts: normalizeModelCosts(setting.modelChannel?.modelCosts || []),
+            maxConcurrentRequests: Math.max(1, Number(setting.modelChannel?.maxConcurrentRequests) || 3),
         },
         auth: {
             allowRegister: setting.auth?.allowRegister !== false,
