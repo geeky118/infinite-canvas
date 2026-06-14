@@ -591,80 +591,67 @@ func davidWuGptImage2Tags(item davidWuGptImage2Prompt) []string {
 	return tags
 }
 
-func davidWuGptImage2Preview(item davidWuGptImage2Prompt, image string) string {
-	lines := []string{}
-	if item.TitleEN != "" {
-		lines = append(lines, item.TitleEN)
+func buildPreview(parts ...string) string {
+	filtered := []string{}
+	for _, p := range parts {
+		if p != "" {
+			filtered = append(filtered, p)
+		}
 	}
-	if item.Note != "" {
-		lines = append(lines, item.Note)
+	return strings.Join(filtered, "\n\n")
+}
+
+func joinMetadata(items ...string) string {
+	meta := []string{}
+	for _, item := range items {
+		if item != "" {
+			meta = append(meta, item)
+		}
 	}
+	return strings.Join(meta, " · ")
+}
+
+func previewImage(image string) string {
 	if image != "" {
-		lines = append(lines, "![]("+image+")")
+		return "![](" + image + ")"
 	}
-	return strings.Join(lines, "\n\n")
+	return ""
+}
+
+func davidWuGptImage2Preview(item davidWuGptImage2Prompt, image string) string {
+	return buildPreview(item.TitleEN, item.Note, previewImage(image))
 }
 
 func youMindAIImagePreview(item youMindAIImagePrompt, image string) string {
-	lines := []string{}
-	if item.Description != "" {
-		lines = append(lines, item.Description)
-	}
+	refNote := ""
 	if item.NeedReferenceImages {
-		lines = append(lines, "需要参考图")
+		refNote = "需要参考图"
 	}
-	if image != "" {
-		lines = append(lines, "![]("+image+")")
-	}
-	return strings.Join(lines, "\n\n")
+	return buildPreview(item.Description, refNote, previewImage(image))
 }
 
 func nexraAIImagePreview(item nexraAIImagePrompt, image string) string {
-	lines := []string{}
+	titleEN := ""
 	if item.TitleEN != "" && item.TitleEN != item.TitleZH {
-		lines = append(lines, item.TitleEN)
+		titleEN = item.TitleEN
 	}
-	meta := []string{}
-	if item.Author != "" {
-		meta = append(meta, item.Author)
-	}
-	if item.License != "" {
-		meta = append(meta, item.License)
-	}
+	score := ""
 	if item.QualityScore > 0 {
-		meta = append(meta, "score "+strconv.Itoa(item.QualityScore))
+		score = "score " + strconv.Itoa(item.QualityScore)
 	}
-	if len(meta) > 0 {
-		lines = append(lines, strings.Join(meta, " · "))
-	}
-	if image != "" {
-		lines = append(lines, "![]("+image+")")
-	}
-	return strings.Join(lines, "\n\n")
+	return buildPreview(titleEN, joinMetadata(item.Author, item.License, score), previewImage(image))
 }
 
 func nanoBananaTrendingPreview(item nanoBananaTrendingPrompt, image string) string {
-	lines := []string{}
-	meta := []string{}
-	if item.Model != "" {
-		meta = append(meta, item.Model)
-	}
+	views := ""
 	if item.Views > 0 {
-		meta = append(meta, strconv.Itoa(item.Views)+" views")
+		views = strconv.Itoa(item.Views) + " views"
 	}
+	likes := ""
 	if item.Likes > 0 {
-		meta = append(meta, strconv.Itoa(item.Likes)+" likes")
+		likes = strconv.Itoa(item.Likes) + " likes"
 	}
-	if item.SourceURL != "" {
-		meta = append(meta, item.SourceURL)
-	}
-	if len(meta) > 0 {
-		lines = append(lines, strings.Join(meta, " · "))
-	}
-	if image != "" {
-		lines = append(lines, "![]("+image+")")
-	}
-	return strings.Join(lines, "\n\n")
+	return buildPreview(joinMetadata(item.Model, views, likes, item.SourceURL), previewImage(image))
 }
 
 func splitTags(value string, pattern string) []string {

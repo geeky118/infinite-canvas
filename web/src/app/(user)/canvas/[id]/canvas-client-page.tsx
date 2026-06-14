@@ -43,6 +43,7 @@ import { CanvasToolbar } from "../components/canvas-toolbar";
 import { AssetPickerModal, type AssetPickerTab, type InsertAssetPayload } from "../components/asset-picker-modal";
 import { CanvasZoomControls } from "../components/canvas-zoom-controls";
 import { useCanvasStore } from "../stores/use-canvas-store";
+import { useUserStore } from "@/stores/use-user-store";
 import { buildCanvasResourceReferences, buildNodeMentionReferences } from "../utils/canvas-resource-references";
 import { canvasTextSelectionStyle, copySelectedTextFromTextControl } from "../utils/canvas-text-clipboard";
 import {
@@ -131,6 +132,8 @@ export default function CanvasPage() {
     return <InfiniteCanvasPage />;
 }
 
+const shimmer = (delay: number) => ({ animation: `canvas-shell-shimmer 2.2s ease-in-out ${delay}ms infinite` });
+
 function CanvasRefreshShell() {
     return (
         <main className="relative h-full min-h-0 overflow-hidden bg-background text-foreground">
@@ -144,23 +147,23 @@ function CanvasRefreshShell() {
 
             <div className="absolute bottom-5 left-1/2 z-50 flex h-14 -translate-x-1/2 items-center gap-1 rounded-xl border px-2 shadow-lg backdrop-blur" style={{ background: "var(--background)", borderColor: "var(--border)" }} aria-hidden="true">
                 {Array.from({ length: 7 }).map((_, index) => (
-                    <div key={index} className="size-8 rounded-md bg-current opacity-10" />
+                    <div key={index} className="size-8 rounded-md bg-current opacity-10" style={shimmer(index * 120)} />
                 ))}
             </div>
 
             <div className="absolute bottom-24 left-6 z-50 h-40 w-[240px] rounded-lg border shadow-2xl backdrop-blur-sm" style={{ background: "var(--background)", borderColor: "var(--border)" }} aria-hidden="true">
-                <div className="absolute left-7 top-7 h-5 w-12 rounded-sm bg-current opacity-10" />
-                <div className="absolute left-28 top-16 h-6 w-16 rounded-sm bg-current opacity-10" />
-                <div className="absolute bottom-7 left-16 h-8 w-20 rounded-sm bg-current opacity-10" />
+                <div className="absolute left-7 top-7 h-5 w-12 rounded-sm bg-current opacity-10" style={shimmer(0)} />
+                <div className="absolute left-28 top-16 h-6 w-16 rounded-sm bg-current opacity-10" style={shimmer(200)} />
+                <div className="absolute bottom-7 left-16 h-8 w-20 rounded-sm bg-current opacity-10" style={shimmer(400)} />
                 <div className="absolute inset-5 rounded border border-current opacity-15" />
             </div>
 
             <div className="absolute bottom-5 left-5 z-50 flex h-14 w-[260px] items-center gap-2 rounded-xl border px-2 shadow-lg backdrop-blur" style={{ background: "var(--background)", borderColor: "var(--border)" }} aria-hidden="true">
-                <div className="size-8 rounded-md bg-current opacity-10" />
-                <div className="size-8 rounded-md bg-current opacity-10" />
-                <div className="h-1 flex-1 rounded-full bg-current opacity-10" />
-                <div className="h-4 w-10 rounded bg-current opacity-10" />
-                <div className="size-8 rounded-md bg-current opacity-10" />
+                <div className="size-8 rounded-md bg-current opacity-10" style={shimmer(0)} />
+                <div className="size-8 rounded-md bg-current opacity-10" style={shimmer(100)} />
+                <div className="h-1 flex-1 rounded-full bg-current opacity-10" style={shimmer(200)} />
+                <div className="h-4 w-10 rounded bg-current opacity-10" style={shimmer(350)} />
+                <div className="size-8 rounded-md bg-current opacity-10" style={shimmer(450)} />
             </div>
         </main>
     );
@@ -255,7 +258,9 @@ function InfiniteCanvasPage() {
     const updateProject = useCanvasStore((state) => state.updateProject);
     const renameProject = useCanvasStore((state) => state.renameProject);
     const deleteProjects = useCanvasStore((state) => state.deleteProjects);
+    const refetchCloudProjects = useCanvasStore((state) => state.refetchCloudProjects);
     const currentProject = useCanvasStore((state) => state.projects.find((project) => project.id === projectId));
+    const token = useUserStore((state) => state.token);
     const theme = canvasThemes[useThemeStore((state) => state.theme)];
     const [nodes, setNodes] = useState<CanvasNodeData[]>([]);
     const [connections, setConnections] = useState<CanvasConnection[]>([]);
@@ -340,15 +345,26 @@ function InfiniteCanvasPage() {
     useEffect(() => {
         if (!hydrated || !cloudHydrated) return;
         setProjectLoaded(false);
-        const project = openProject(projectId);
-        if (!project) {
-            router.replace("/canvas");
-            return;
-        }
 
-        const restore = async () => {
-            const restoredNodes = await hydrateCanvasImages(resetInterruptedGeneration(project.nodes));
-            setNodes(restoredNodes);
+        const load = async () => {
+            if (token) {
+                await refetchCloudProjects(token);
+            }
+            const project = openProject(projectId);
+            if (!project) {
+                router.replace("/canvas");
+                return;
+            }
+
+            const baseNodes = resetInterruptedGeneration(project.nodes);
+            const immediateNodes = baseNodes.filter((n) => !needsMediaHydration(n));
+            const deferredNodes = baseNodes.filter(needsMediaHydration);
+
+            const placeholderNodes = immediateNodes.concat(
+                deferredNodes.map((n) => ({ ...n, metadata: { ...n.metadata, hydrating: true } })),
+            );
+
+            setNodes(placeholderNodes);
             setConnections(project.connections);
             setChatSessions(project.chatSessions || []);
             setActiveChatId(project.activeChatId || null);
@@ -362,7 +378,7 @@ function InfiniteCanvasPage() {
                 historyCommitTimerRef.current = null;
             }
             lastHistoryRef.current = {
-                nodes: restoredNodes,
+                nodes: placeholderNodes,
                 connections: project.connections,
                 chatSessions: project.chatSessions || [],
                 activeChatId: project.activeChatId || null,
@@ -371,9 +387,21 @@ function InfiniteCanvasPage() {
             };
             setHistoryState({ canUndo: false, canRedo: false });
             setProjectLoaded(true);
+
+            if (deferredNodes.length === 0) return;
+
+            const BATCH = 4;
+            for (let i = 0; i < deferredNodes.length; i += BATCH) {
+                const batch = deferredNodes.slice(i, i + BATCH);
+                const resolved = await Promise.all(batch.map(hydrateSingleMediaNode));
+                setNodes((prev) => {
+                    const map = new Map(resolved.map((n) => [n.id, n]));
+                    return prev.map((node) => map.get(node.id) || node);
+                });
+            }
         };
-        void restore();
-    }, [cloudHydrated, hydrated, openProject, projectId, router]);
+        void load();
+    }, [cloudHydrated, hydrated, openProject, projectId, refetchCloudProjects, router, token]);
 
     useEffect(() => {
         if (!projectLoaded || typeof window === "undefined") return;
@@ -3360,16 +3388,22 @@ async function resolveMetadataReferences(metadata: CanvasNodeMetadata) {
 }
 
 async function hydrateCanvasImages(nodes: CanvasNodeData[]) {
-    return Promise.all(
-        nodes.map(async (node) => {
-            const content = node.metadata?.content;
-            if ((node.type === CanvasNodeType.Video || node.type === CanvasNodeType.Audio) && node.metadata?.storageKey) return { ...node, metadata: { ...node.metadata, content: await resolveMediaUrl(node.metadata.storageKey, content) } };
-            if (node.type !== CanvasNodeType.Image || !content) return node;
-            if (node.metadata?.storageKey) return { ...node, metadata: { ...node.metadata, content: await resolveImageUrl(node.metadata.storageKey, content, node.metadata.remoteUrl) } };
-            if (!content.startsWith("data:image/")) return node;
-            return { ...node, metadata: { ...node.metadata, ...imageMetadata(await uploadImage(content)) } };
-        }),
-    );
+    return Promise.all(nodes.map(hydrateSingleMediaNode));
+}
+
+async function hydrateSingleMediaNode(node: CanvasNodeData): Promise<CanvasNodeData> {
+    const content = node.metadata?.content;
+    if ((node.type === CanvasNodeType.Video || node.type === CanvasNodeType.Audio) && node.metadata?.storageKey) return { ...node, metadata: { ...node.metadata, content: await resolveMediaUrl(node.metadata.storageKey, content) } };
+    if (node.type !== CanvasNodeType.Image || !content) return node;
+    if (node.metadata?.storageKey) return { ...node, metadata: { ...node.metadata, content: await resolveImageUrl(node.metadata.storageKey, content, node.metadata.remoteUrl) } };
+    if (!content.startsWith("data:image/")) return node;
+    return { ...node, metadata: { ...node.metadata, ...imageMetadata(await uploadImage(content)) } };
+}
+
+function needsMediaHydration(node: CanvasNodeData): boolean {
+    if (node.type === CanvasNodeType.Video || node.type === CanvasNodeType.Audio) return Boolean(node.metadata?.storageKey);
+    if (node.type === CanvasNodeType.Image) return Boolean(node.metadata?.storageKey) || Boolean(node.metadata?.content?.startsWith("data:image/"));
+    return false;
 }
 
 function getGenerationCount(count: string) {

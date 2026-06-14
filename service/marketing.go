@@ -245,16 +245,12 @@ func RedeemMarketingCode(userID string, code string) (model.MarketingRedeemResul
 			}).Error; err != nil {
 				return err
 			}
-			updated := model.User{}
-			if err := tx.Where("id = ?", userID).First(&updated).Error; err != nil {
-				return err
-			}
 			return tx.Create(&model.CreditLog{
 				ID:        newID("credit"),
 				UserID:    userID,
 				Type:      model.CreditLogTypeRedeemCode,
 				Amount:    0,
-				Balance:   updated.Credits,
+				Balance:   user.Credits,
 				RelatedID: item.Code,
 				Remark:    "兑换码兑换订阅",
 				Extra:     redemptionExtra(item),

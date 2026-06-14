@@ -338,6 +338,7 @@ export const CanvasNode = React.memo(function CanvasNode({
 function NodeContent(props: NodeContentRendererProps) {
     if (props.node.type === CanvasNodeType.Config && props.renderNodeContent) return props.renderNodeContent(props.node);
     if (props.isBatchRoot) return <ImageNodeContent {...props} />;
+    if (props.node.metadata?.hydrating) return <HydratingContent theme={props.theme} />;
     if (props.node.metadata?.status === "loading") return <LoadingContent theme={props.theme} />;
     if (props.node.metadata?.status === "error") return <ErrorContent node={props.node} theme={props.theme} onRetry={props.onRetry} />;
 
@@ -358,6 +359,14 @@ function LoadingContent({ theme }: Pick<NodeContentRendererProps, "theme">) {
         <div className="flex h-full w-full flex-col items-center justify-center gap-3" style={{ color: theme.node.activeStroke }}>
             <div className="size-10 animate-spin rounded-full border-2" style={{ borderColor: theme.node.stroke, borderTopColor: theme.node.activeStroke }} />
             <span className="text-[10px] tracking-[0.2em]">生成中</span>
+        </div>
+    );
+}
+
+function HydratingContent({ theme }: Pick<NodeContentRendererProps, "theme">) {
+    return (
+        <div className="flex h-full w-full items-center justify-center">
+            <div className="size-6 animate-spin rounded-full border-[1.5px]" style={{ borderColor: `${theme.node.stroke}30`, borderTopColor: `${theme.node.activeStroke}80` }} />
         </div>
     );
 }

@@ -7,7 +7,7 @@ import (
 )
 
 func AdminOverview(w http.ResponseWriter, r *http.Request) {
-	overview, err := service.AdminOverview(0, 0, nil)
+	overview, err := service.AdminOverview()
 	if err != nil {
 		FailError(w, err)
 		return

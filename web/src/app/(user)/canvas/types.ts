@@ -56,6 +56,7 @@ export type CanvasNodeMetadata = {
     remoteUrl?: string;
     remoteKey?: string;
     mimeType?: string;
+    hydrating?: boolean;
     bytes?: number;
     durationMs?: number;
 };

@@ -8,6 +8,8 @@ import { fetchAdminOverview } from "@/services/api/admin";
 import { useUserStore } from "@/stores/use-user-store";
 import { adminModuleStats } from "./admin-modules";
 
+const cachedModuleStats = adminModuleStats();
+
 export function useAdminOverview() {
     const { message } = App.useApp();
     const token = useUserStore((state) => state.token);
@@ -17,6 +19,7 @@ export function useAdminOverview() {
         queryFn: () => fetchAdminOverview(token),
         enabled: Boolean(token),
         retry: false,
+        staleTime: 60_000,
     });
 
     useEffect(() => {
@@ -25,15 +28,17 @@ export function useAdminOverview() {
         message.error(errorMessage);
         if (errorMessage.includes("未登录") || errorMessage.includes("权限不足") || errorMessage.includes("登录状态无效")) clearSession();
     }, [clearSession, message, query.error, query.isError]);
+    const marketing = query.data?.marketing;
+    const codeUseRate = marketing?.redemptionCodes ? Math.round((marketing.usedCodes / marketing.redemptionCodes) * 100) : 0;
 
-    const moduleStats = adminModuleStats();
     return {
         overview: query.data
             ? {
                   ...query.data,
-                  systemModules: moduleStats,
+                  systemModules: cachedModuleStats,
               }
             : null,
+        codeUseRate,
         isLoading: query.isFetching,
         refresh: query.refetch,
     };

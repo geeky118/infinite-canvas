@@ -7,13 +7,11 @@ import { adminModules } from "./admin-modules";
 import { useAdminOverview } from "./use-admin-overview";
 
 export default function AdminDashboardPage() {
-    const { overview, isLoading, refresh } = useAdminOverview();
+    const { overview, codeUseRate, isLoading, refresh } = useAdminOverview();
     const users = overview?.users;
     const credits = overview?.credits;
     const content = overview?.content;
-    const marketing = overview?.marketing;
     const finance = overview?.finance;
-    const codeUseRate = marketing?.redemptionCodes ? Math.round((marketing.usedCodes / marketing.redemptionCodes) * 100) : 0;
 
     return (
         <main style={{ padding: 24 }}>

@@ -189,6 +189,87 @@ export function CanvasAssistantPanel({ nodes, selectedNodeIds, sessions, activeS
         cleanupImages({ sessions: [session] });
     };
 
+
+    const executeImageTasks = async (sessionId: string, assistantId: string, text: string, history: CanvasAssistantMessage[], refs: CanvasAssistantReference[], requestConfig: AiConfig) => {
+            updateMessage(sessionId, assistantId, { text: refs.some(hasImageReference) ? "正在读取参考图" : "正在准备图片任务", isLoading: true });
+            const referenceImages: ReferenceImage[] = await Promise.all(
+                refs.filter(hasImageReference).map(async (item) => ({ id: item.id, name: `${item.title}.png`, type: "image/png", dataUrl: await imageToDataUrl(item), storageKey: item.storageKey, remoteUrl: item.remoteUrl })),
+            );
+            const imagePrompt = resolveImagePrompt(text, history, refs);
+            if (!imagePrompt) {
+                updateMessage(sessionId, assistantId, { text: "没有找到上一条可用的提示词，请先生成或输入具体提示词。", isLoading: false });
+                return;
+            }
+            const plan = shouldUseFastSingleImageEdit(text, refs)
+                ? fallbackImageTaskPlan(imagePrompt, text, refs)
+                : await buildImageTaskPlan(requestConfig, imagePrompt, text, refs, referenceImages);
+            const isMultiTask = plan.strategy === "multi" || plan.tasks.length > 1;
+            if (isMultiTask) {
+                updateMessage(sessionId, assistantId, { text: `已识别为“${plan.intent}”，拆分为 ${plan.tasks.length} 个执行任务，正在并行生成`, isLoading: true });
+                const generatedImages: GeneratedAssistantImage[] = [];
+                const taskSlotRequests = plan.tasks.map((task) => {
+                    const count = resolveTaskCount(task, 1);
+                    return Array.from({ length: count }, (_, index) => ({
+                            id: nanoid(),
+                            prompt: task.prompt,
+                            title: count > 1 ? `${task.title || "图片"} ${index + 1}` : task.title,
+                        }));
+                });
+                const pendingImages = onPrepareImages(taskSlotRequests.flat());
+                let slotOffset = 0;
+                const taskSlots = taskSlotRequests.map((slots) => {
+                    const taskImages = pendingImages.slice(slotOffset, slotOffset + slots.length);
+                    slotOffset += slots.length;
+                    return taskImages;
+                });
+                const failedTasks: string[] = [];
+                const taskResults = await Promise.allSettled(
+                    plan.tasks.map(async (task, index) => {
+                        const taskConfig = { ...requestConfig, count: String(resolveTaskCount(task, 1)) };
+                        const images = await requestTaskImagesWithRetry(taskConfig, task.prompt, selectTaskReferenceImages(task, referenceImages));
+                        return { task, images: images.slice(0, resolveTaskCount(task, 1)).map((image, imageIndex) => ({ id: taskSlots[index]?.[imageIndex]?.id || image.id, dataUrl: image.dataUrl, prompt: task.prompt })) };
+                    }),
+                );
+                const failedIds: string[] = [];
+                taskResults.forEach((result, index) => {
+                    const task = plan.tasks[index];
+                    if (result.status === "fulfilled") generatedImages.push(...result.value.images);
+                    else {
+                        failedIds.push(...taskSlots[index].map((image) => image.id));
+                        failedTasks.push(`${task?.title || `任务 ${index + 1}`}：${readErrorMessage(result.reason)}`);
+                    }
+                });
+                await commitGeneratedImages(sessionId, assistantId, generatedImages, {
+                    success: `已按任务拆分生成 ${generatedImages.length} 张图片`,
+                    empty: failedTasks.length ? `图片任务执行失败：${failedTasks.slice(0, 3).join("；")}` : "图片任务没有返回结果",
+                    warnings: failedTasks,
+                    pendingImages,
+                    failedIds: failedIds.filter(Boolean),
+                });
+                return;
+            }
+
+            const task = plan.tasks[0] || fallbackImageTask(imagePrompt, 0);
+            updateMessage(sessionId, assistantId, { text: `已识别为“${plan.intent}”，由${task.role}执行`, isLoading: true });
+            const singleCount = resolveTaskCount(task, readConfigCount(requestConfig.count));
+            const singleTaskConfig = { ...requestConfig, count: String(singleCount) };
+            const pendingImages = onPrepareImages(
+                Array.from({ length: singleCount }, (_, index) => ({
+                    id: nanoid(),
+                    prompt: task.prompt,
+                    title: singleCount > 1 ? `${task.title || "图片"} ${index + 1}` : task.title,
+                })),
+            );
+            const images = await requestTaskImagesWithRetry(singleTaskConfig, task.prompt, selectTaskReferenceImages(task, referenceImages));
+            await commitGeneratedImages(
+                sessionId,
+                assistantId,
+                images.map((image, index) => ({ id: pendingImages[index]?.id || image.id, dataUrl: image.dataUrl, prompt: task.prompt })),
+                { success: `生成了 ${images.length} 张图片`, empty: "接口没有返回图片", pendingImages },
+            );
+            return;
+    };
+
     const sendMessage = async (text: string, nextMode: AssistantMode, history: CanvasAssistantMessage[], savedReferences?: CanvasAssistantReference[]) => {
         setIsRunning(true);
         const selectedRefs = resolveAssistantMessageReferences(text, savedReferences ?? selectedReferences, history, nodes);
@@ -234,82 +315,7 @@ export function CanvasAssistantPanel({ nodes, selectedNodeIds, sessions, activeS
             updateMessage(session.id, assistantId, { mode: routedMode, text: intent.kind === "image_split" ? "正在拆分图片任务" : intent.kind === "image_analysis" ? "正在分析图片" : routedMode === "image" ? "正在准备图片任务" : "正在回答", isLoading: true });
 
             if (routedMode === "image") {
-                updateMessage(session.id, assistantId, { text: refs.some(hasImageReference) ? "正在读取参考图" : "正在准备图片任务", isLoading: true });
-                const referenceImages: ReferenceImage[] = await Promise.all(
-                    refs.filter(hasImageReference).map(async (item) => ({ id: item.id, name: `${item.title}.png`, type: "image/png", dataUrl: await imageToDataUrl(item), storageKey: item.storageKey, remoteUrl: item.remoteUrl })),
-                );
-                const imagePrompt = resolveImagePrompt(text, history, refs);
-                if (!imagePrompt) {
-                    updateMessage(session.id, assistantId, { text: "没有找到上一条可用的提示词，请先生成或输入具体提示词。", isLoading: false });
-                    return;
-                }
-                const plan = shouldUseFastSingleImageEdit(text, refs)
-                    ? fallbackImageTaskPlan(imagePrompt, text, refs)
-                    : await buildImageTaskPlan(requestConfig, imagePrompt, text, refs, referenceImages);
-                const isMultiTask = plan.strategy === "multi" || plan.tasks.length > 1;
-                if (isMultiTask) {
-                    updateMessage(session.id, assistantId, { text: `已识别为“${plan.intent}”，拆分为 ${plan.tasks.length} 个执行任务，正在并行生成`, isLoading: true });
-                    const generatedImages: GeneratedAssistantImage[] = [];
-                    const taskSlotRequests = plan.tasks.map((task) => {
-                        const count = resolveTaskCount(task, 1);
-                        return Array.from({ length: count }, (_, index) => ({
-                                id: nanoid(),
-                                prompt: task.prompt,
-                                title: count > 1 ? `${task.title || "图片"} ${index + 1}` : task.title,
-                            }));
-                    });
-                    const pendingImages = onPrepareImages(taskSlotRequests.flat());
-                    let slotOffset = 0;
-                    const taskSlots = taskSlotRequests.map((slots) => {
-                        const taskImages = pendingImages.slice(slotOffset, slotOffset + slots.length);
-                        slotOffset += slots.length;
-                        return taskImages;
-                    });
-                    const failedTasks: string[] = [];
-                    const taskResults = await Promise.allSettled(
-                        plan.tasks.map(async (task, index) => {
-                            const taskConfig = { ...requestConfig, count: String(resolveTaskCount(task, 1)) };
-                            const images = await requestTaskImagesWithRetry(taskConfig, task.prompt, selectTaskReferenceImages(task, referenceImages));
-                            return { task, images: images.slice(0, resolveTaskCount(task, 1)).map((image, imageIndex) => ({ id: taskSlots[index]?.[imageIndex]?.id || image.id, dataUrl: image.dataUrl, prompt: task.prompt })) };
-                        }),
-                    );
-                    const failedIds: string[] = [];
-                    taskResults.forEach((result, index) => {
-                        const task = plan.tasks[index];
-                        if (result.status === "fulfilled") generatedImages.push(...result.value.images);
-                        else {
-                            failedIds.push(...taskSlots[index].map((image) => image.id));
-                            failedTasks.push(`${task?.title || `任务 ${index + 1}`}：${readErrorMessage(result.reason)}`);
-                        }
-                    });
-                    await commitGeneratedImages(session.id, assistantId, generatedImages, {
-                        success: `已按任务拆分生成 ${generatedImages.length} 张图片`,
-                        empty: failedTasks.length ? `图片任务执行失败：${failedTasks.slice(0, 3).join("；")}` : "图片任务没有返回结果",
-                        warnings: failedTasks,
-                        pendingImages,
-                        failedIds: failedIds.filter(Boolean),
-                    });
-                    return;
-                }
-
-                const task = plan.tasks[0] || fallbackImageTask(imagePrompt, 0);
-                updateMessage(session.id, assistantId, { text: `已识别为“${plan.intent}”，由${task.role}执行`, isLoading: true });
-                const singleCount = resolveTaskCount(task, readConfigCount(requestConfig.count));
-                const singleTaskConfig = { ...requestConfig, count: String(singleCount) };
-                const pendingImages = onPrepareImages(
-                    Array.from({ length: singleCount }, (_, index) => ({
-                        id: nanoid(),
-                        prompt: task.prompt,
-                        title: singleCount > 1 ? `${task.title || "图片"} ${index + 1}` : task.title,
-                    })),
-                );
-                const images = await requestTaskImagesWithRetry(singleTaskConfig, task.prompt, selectTaskReferenceImages(task, referenceImages));
-                await commitGeneratedImages(
-                    session.id,
-                    assistantId,
-                    images.map((image, index) => ({ id: pendingImages[index]?.id || image.id, dataUrl: image.dataUrl, prompt: task.prompt })),
-                    { success: `生成了 ${images.length} 张图片`, empty: "接口没有返回图片", pendingImages },
-                );
+                await executeImageTasks(session.id, assistantId, text, history, refs, requestConfig);
                 return;
             }
 

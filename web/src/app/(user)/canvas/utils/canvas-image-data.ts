@@ -18,6 +18,49 @@ export type ImageUpscaleAlgorithm = "nearest" | "bilinear" | "high";
 
 export const MAX_UPSCALE_LONG_EDGE = 4096;
 
+// Background removal — scoring thresholds
+const BG_EARLY_EXIT_SCORE = 0.74;
+const BG_EARLY_EXIT_MAX_REMOVED = 0.72;
+const BG_FALLBACK_MAX_REMOVED = 0.76;
+const BG_FALLBACK_MIN_SCORE = 0.32;
+const BG_SCORE_MIN_REMOVED = 0.01;
+const BG_SCORE_MAX_REMOVED = 0.92;
+const BG_SCORE_TARGET_RATIO = 0.34;
+const BG_SCORE_IDEAL_MIN = 0.1;
+const BG_SCORE_IDEAL_MAX = 0.62;
+const BG_CENTER_PENALTY_THRESHOLD = 0.38;
+const BG_EDGE_SOFT_TOLERANCE_OFFSET = 12;
+const BG_EDGE_SOFT_ALPHA_FLOOR = 112;
+const BG_EDGE_SOFT_BLEND_FACTOR = 0.72;
+
+// Background removal — alpha thresholds
+const BG_TRANSPARENT_ALPHA = 16;
+const BG_OPAQUE_ALPHA = 240;
+const BG_NEAR_OPAQUE_ALPHA = 220;
+
+// Background removal — quality warnings
+const BG_WARN_MIN_REMOVED = 0.03;
+const BG_WARN_MAX_REMOVED = 0.84;
+const BG_WARN_CENTER_REMOVED = 0.42;
+const BG_WARN_EDGE_OPAQUE = 0.48;
+const BG_WARN_PARTIAL_ALPHA = 0.38;
+
+// Background removal — model alpha adjustment
+const BG_ALPHA_CONSERVATIVE_CUTOFF = 56;
+const BG_ALPHA_STRONG_CUTOFF = 96;
+const BG_ALPHA_STANDARD_CUTOFF = 44;
+const BG_ALPHA_STANDARD_OPAQUE = 232;
+
+// Background removal — hair restoration
+const BG_HAIR_LUMINANCE_THRESHOLD = 92;
+const BG_HAIR_CONTRAST_THRESHOLD = 18;
+
+// Background removal — center region ratios
+const BG_CENTER_LEFT_RATIO = 0.2;
+const BG_CENTER_RIGHT_RATIO = 0.8;
+const BG_CENTER_TOP_RATIO = 0.15;
+const BG_CENTER_BOTTOM_RATIO = 0.9;
+
 export type ImageUpscaleParams = {
     targetLongEdge: number;
     algorithm: ImageUpscaleAlgorithm;
@@ -254,10 +297,10 @@ function removeEdgeConnectedBackground(imageData: ImageData, width: number, heig
         if (!best || score > best.score) {
             best = { imageData: candidate, removedRatio, score };
         }
-        if (score >= 0.74 && removedRatio <= 0.72) return candidate;
+        if (score >= BG_EARLY_EXIT_SCORE && removedRatio <= BG_EARLY_EXIT_MAX_REMOVED) return candidate;
     }
 
-    return best && best.removedRatio <= 0.76 && best.score >= 0.32 ? best.imageData : null;
+    return best && best.removedRatio <= BG_FALLBACK_MAX_REMOVED && best.score >= BG_FALLBACK_MIN_SCORE ? best.imageData : null;
 }
 
 function removeBackgroundAttempts(strength: RemoveBackgroundStrength) {
@@ -310,10 +353,10 @@ function applyEdgeConnectedBackgroundRemoval(imageData: ImageData, width: number
     let removedEdgePixels = 0;
     let removedCenterPixels = 0;
     let centerPixels = 0;
-    const centerLeft = Math.floor(width * 0.2);
-    const centerRight = Math.ceil(width * 0.8);
-    const centerTop = Math.floor(height * 0.15);
-    const centerBottom = Math.ceil(height * 0.9);
+    const centerLeft = Math.floor(width * BG_CENTER_LEFT_RATIO);
+    const centerRight = Math.ceil(width * BG_CENTER_RIGHT_RATIO);
+    const centerTop = Math.floor(height * BG_CENTER_TOP_RATIO);
+    const centerBottom = Math.ceil(height * BG_CENTER_BOTTOM_RATIO);
     for (let head = 0; head < queue.length; head += 1) {
         const index = queue[head];
         const offset = index * 4;
@@ -335,12 +378,12 @@ function applyEdgeConnectedBackgroundRemoval(imageData: ImageData, width: number
 }
 
 function scoreBackgroundRemoval(removedRatio: number, edgeCoverage: number, centerRemovedRatio: number, sampleCount: number) {
-    if (removedRatio <= 0.01 || removedRatio >= 0.92) return 0;
-    const targetRatio = removedRatio < 0.1 ? 0.1 : removedRatio > 0.62 ? 0.62 : removedRatio;
-    const ratioScore = 1 - Math.min(1, Math.abs(targetRatio - 0.34) / 0.34);
+    if (removedRatio <= BG_SCORE_MIN_REMOVED || removedRatio >= BG_SCORE_MAX_REMOVED) return 0;
+    const targetRatio = removedRatio < BG_SCORE_IDEAL_MIN ? BG_SCORE_IDEAL_MIN : removedRatio > BG_SCORE_IDEAL_MAX ? BG_SCORE_IDEAL_MAX : removedRatio;
+    const ratioScore = 1 - Math.min(1, Math.abs(targetRatio - BG_SCORE_TARGET_RATIO) / BG_SCORE_TARGET_RATIO);
     const edgeScore = Math.min(1, Math.max(0, edgeCoverage));
     const sampleScore = Math.min(1, sampleCount / 3);
-    const centerPenalty = Math.max(0, centerRemovedRatio - 0.38) * 0.9;
+    const centerPenalty = Math.max(0, centerRemovedRatio - BG_CENTER_PENALTY_THRESHOLD) * 0.9;
     return ratioScore * 0.42 + edgeScore * 0.46 + sampleScore * 0.12 - centerPenalty;
 }
 
@@ -364,7 +407,7 @@ function collectTopCornerSamples(data: Uint8ClampedArray, width: number, height:
     const rawSamples: Array<[number, number, number]> = [];
     const add = (x: number, y: number) => {
         const offset = (y * width + x) * 4;
-        if (data[offset + 3] >= 16) rawSamples.push([data[offset], data[offset + 1], data[offset + 2]]);
+        if (data[offset + 3] >= BG_TRANSPARENT_ALPHA) rawSamples.push([data[offset], data[offset + 1], data[offset + 2]]);
     };
     for (let y = 0; y < patch; y += step) {
         for (let x = 0; x < patch; x += step) {
@@ -380,7 +423,7 @@ function collectBorderClusters(data: Uint8ClampedArray, width: number, height: n
     const rawSamples: Array<[number, number, number]> = [];
     const add = (x: number, y: number) => {
         const offset = (y * width + x) * 4;
-        if (data[offset + 3] >= 16) rawSamples.push([data[offset], data[offset + 1], data[offset + 2]]);
+        if (data[offset + 3] >= BG_TRANSPARENT_ALPHA) rawSamples.push([data[offset], data[offset + 1], data[offset + 2]]);
     };
     for (let x = 0; x < width; x += step) {
         add(x, 0);
@@ -418,7 +461,7 @@ function clusterSamples(samples: Array<[number, number, number]>, limit: number)
 }
 
 function isBackgroundPixel(data: Uint8ClampedArray, offset: number, samples: Array<[number, number, number]>, tolerance: number) {
-    if (data[offset + 3] < 16) return true;
+    if (data[offset + 3] < BG_TRANSPARENT_ALPHA) return true;
     return samples.some(([r, g, b]) => colorDistance(data[offset], data[offset + 1], data[offset + 2], r, g, b) <= tolerance);
 }
 
@@ -436,9 +479,9 @@ function refineBackgroundEdge(data: Uint8ClampedArray, removed: Uint8Array, samp
     for (const index of candidates) {
         const offset = index * 4;
         const distance = minColorDistance(data[offset], data[offset + 1], data[offset + 2], samples);
-        if (distance <= tolerance + 12) {
-            const alpha = Math.round(((distance - tolerance * 0.72) / (tolerance + 12 - tolerance * 0.72)) * 255);
-            data[offset + 3] = Math.min(data[offset + 3], Math.max(112, alpha));
+        if (distance <= tolerance + BG_EDGE_SOFT_TOLERANCE_OFFSET) {
+            const alpha = Math.round(((distance - tolerance * BG_EDGE_SOFT_BLEND_FACTOR) / (tolerance + BG_EDGE_SOFT_TOLERANCE_OFFSET - tolerance * BG_EDGE_SOFT_BLEND_FACTOR)) * 255);
+            data[offset + 3] = Math.min(data[offset + 3], Math.max(BG_EDGE_SOFT_ALPHA_FLOOR, alpha));
         }
     }
 }
@@ -471,11 +514,11 @@ async function adjustModelAlpha(dataUrl: string, strength: RemoveBackgroundStren
     for (let offset = 3; offset < data.length; offset += 4) {
         const alpha = data[offset];
         if (strength === "conservative") {
-            data[offset] = alpha < 56 ? 0 : Math.min(255, Math.round(alpha * 1.16 + 22));
+            data[offset] = alpha < BG_ALPHA_CONSERVATIVE_CUTOFF ? 0 : Math.min(255, Math.round(alpha * 1.16 + 22));
         } else if (strength === "strong") {
-            data[offset] = alpha < 96 ? 0 : Math.min(255, Math.round(((alpha - 64) / 191) * 255));
+            data[offset] = alpha < BG_ALPHA_STRONG_CUTOFF ? 0 : Math.min(255, Math.round(((alpha - 64) / 191) * 255));
         } else {
-            data[offset] = alpha < 44 ? 0 : alpha > 232 ? 255 : alpha;
+            data[offset] = alpha < BG_ALPHA_STANDARD_CUTOFF ? 0 : alpha > BG_ALPHA_STANDARD_OPAQUE ? 255 : alpha;
         }
     }
     context.putImageData(imageData, 0, 0);
@@ -515,10 +558,10 @@ function restoreDarkEdgePixels(source: Uint8ClampedArray, cutout: Uint8ClampedAr
             const index = y * width + x;
             const offset = index * 4;
             const currentAlpha = cutout[offset + 3];
-            if (currentAlpha >= 160) continue;
+            if (currentAlpha >= BG_NEAR_OPAQUE_ALPHA) continue;
             const luminance = pixelLuminance(source[offset], source[offset + 1], source[offset + 2]);
-            if (luminance > 92) continue;
-            if (localContrast(source, width, x, y) < 18) continue;
+            if (luminance > BG_HAIR_LUMINANCE_THRESHOLD) continue;
+            if (localContrast(source, width, x, y) < BG_HAIR_CONTRAST_THRESHOLD) continue;
             const distance = nearestOpaqueDistance(cutout, width, x, y, radius);
             if (!distance) continue;
             const alpha = Math.max(minAlpha, Math.round(maxAlpha * (1 - (distance - 1) / radius)));
@@ -537,7 +580,7 @@ function nearestOpaqueDistance(data: Uint8ClampedArray, width: number, x: number
             for (let dx = -distance; dx <= distance; dx += 1) {
                 if (Math.abs(dx) !== distance && Math.abs(dy) !== distance) continue;
                 const offset = ((y + dy) * width + x + dx) * 4;
-                if (data[offset + 3] >= 220) return distance;
+                if (data[offset + 3] >= BG_NEAR_OPAQUE_ALPHA) return distance;
             }
         }
     }
@@ -567,10 +610,10 @@ function pixelLuminance(r: number, g: number, b: number) {
 function analyzeAlphaQuality(imageData: ImageData, width: number, height: number): RemoveBackgroundQuality {
     const data = imageData.data;
     const total = Math.max(1, width * height);
-    const centerLeft = Math.floor(width * 0.2);
-    const centerRight = Math.ceil(width * 0.8);
-    const centerTop = Math.floor(height * 0.15);
-    const centerBottom = Math.ceil(height * 0.9);
+    const centerLeft = Math.floor(width * BG_CENTER_LEFT_RATIO);
+    const centerRight = Math.ceil(width * BG_CENTER_RIGHT_RATIO);
+    const centerTop = Math.floor(height * BG_CENTER_TOP_RATIO);
+    const centerBottom = Math.ceil(height * BG_CENTER_BOTTOM_RATIO);
     let transparent = 0;
     let partial = 0;
     let centerTransparent = 0;
@@ -581,15 +624,15 @@ function analyzeAlphaQuality(imageData: ImageData, width: number, height: number
     for (let y = 0; y < height; y += 1) {
         for (let x = 0; x < width; x += 1) {
             const alpha = data[(y * width + x) * 4 + 3];
-            if (alpha < 16) transparent += 1;
-            else if (alpha < 240) partial += 1;
+            if (alpha < BG_TRANSPARENT_ALPHA) transparent += 1;
+            else if (alpha < BG_OPAQUE_ALPHA) partial += 1;
             if (x >= centerLeft && x <= centerRight && y >= centerTop && y <= centerBottom) {
                 centerTotal += 1;
-                if (alpha < 16) centerTransparent += 1;
+                if (alpha < BG_TRANSPARENT_ALPHA) centerTransparent += 1;
             }
             if (x === 0 || y === 0 || x === width - 1 || y === height - 1) {
                 edgeTotal += 1;
-                if (alpha >= 240) edgeOpaque += 1;
+                if (alpha >= BG_OPAQUE_ALPHA) edgeOpaque += 1;
             }
         }
     }
@@ -599,11 +642,11 @@ function analyzeAlphaQuality(imageData: ImageData, width: number, height: number
     const edgeOpaqueRatio = edgeOpaque / Math.max(1, edgeTotal);
     const partialAlphaRatio = partial / total;
     const warnings: string[] = [];
-    if (removedRatio < 0.03) warnings.push("背景清理较少");
-    if (removedRatio > 0.84) warnings.push("透明区域过多");
-    if (centerRemovedRatio > 0.42) warnings.push("主体区域可能被误删");
-    if (edgeOpaqueRatio > 0.48) warnings.push("边缘仍有较多背景残留");
-    if (partialAlphaRatio > 0.38) warnings.push("半透明边缘较多");
+    if (removedRatio < BG_WARN_MIN_REMOVED) warnings.push("背景清理较少");
+    if (removedRatio > BG_WARN_MAX_REMOVED) warnings.push("透明区域过多");
+    if (centerRemovedRatio > BG_WARN_CENTER_REMOVED) warnings.push("主体区域可能被误删");
+    if (edgeOpaqueRatio > BG_WARN_EDGE_OPAQUE) warnings.push("边缘仍有较多背景残留");
+    if (partialAlphaRatio > BG_WARN_PARTIAL_ALPHA) warnings.push("半透明边缘较多");
     return { removedRatio, centerRemovedRatio, edgeOpaqueRatio, partialAlphaRatio, status: warnings.length ? "warning" : "ok", warnings };
 }
 

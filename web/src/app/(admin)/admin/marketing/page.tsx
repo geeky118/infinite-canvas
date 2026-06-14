@@ -3,6 +3,7 @@
 import { CopyOutlined, DeleteOutlined, EditOutlined, GiftOutlined, PlusOutlined, ReloadOutlined, SearchOutlined } from "@ant-design/icons";
 import { ProTable, type ProColumns } from "@ant-design/pro-components";
 import { App, Button, Card, Col, Flex, Form, Input, InputNumber, Modal, Row, Segmented, Select, Space, Statistic, Switch, Tabs, Tag, Tooltip, Typography } from "antd";
+import copy from "copy-to-clipboard";
 import dayjs from "dayjs";
 import { useEffect, useMemo, useState } from "react";
 
@@ -25,9 +26,6 @@ export default function AdminMarketingPage() {
     const [codeForm] = Form.useForm<CodeFormValues>();
     const marketing = useAdminMarketing();
     const { overview } = useAdminOverview();
-    const [planKeywordText, setPlanKeywordText] = useState(marketing.planKeyword);
-    const [codeKeywordText, setCodeKeywordText] = useState(marketing.codeKeyword);
-    const [codeBatchText, setCodeBatchText] = useState(marketing.codeBatchId);
     const [editingPlan, setEditingPlan] = useState<Partial<AdminSubscriptionPlan> | null>(null);
     const [deletingPlan, setDeletingPlan] = useState<AdminSubscriptionPlan | null>(null);
     const [isCodeModalOpen, setIsCodeModalOpen] = useState(false);
@@ -37,10 +35,6 @@ export default function AdminMarketingPage() {
     useEffect(() => {
         settingsForm.setFieldsValue(marketing.settings);
     }, [marketing.settings, settingsForm]);
-
-    useEffect(() => setPlanKeywordText(marketing.planKeyword), [marketing.planKeyword]);
-    useEffect(() => setCodeKeywordText(marketing.codeKeyword), [marketing.codeKeyword]);
-    useEffect(() => setCodeBatchText(marketing.codeBatchId), [marketing.codeBatchId]);
 
     useEffect(() => {
         if (editingPlan) planForm.setFieldsValue({ enabled: true, durationDays: 30, ...editingPlan });
@@ -194,10 +188,10 @@ export default function AdminMarketingPage() {
                                     <Card variant="borderless">
                                         <Row gutter={16} align="bottom">
                                             <Col flex="360px">
-                                                <Input.Search value={planKeywordText} placeholder="搜索订阅名称或说明" allowClear enterButton={<SearchOutlined />} onSearch={() => marketing.searchPlans(planKeywordText)} onChange={(event) => setPlanKeywordText(event.target.value)} />
+                                                <Input.Search value={marketing.planKeyword} placeholder="搜索订阅名称或说明" allowClear enterButton={<SearchOutlined />} onSearch={() => marketing.searchPlans(marketing.planKeyword)} onChange={(event) => marketing.setPlanKeyword(event.target.value)} />
                                             </Col>
                                             <Col flex="none">
-                                                <Button icon={<ReloadOutlined />} onClick={() => marketing.searchPlans(planKeywordText)}>
+                                                <Button icon={<ReloadOutlined />} onClick={() => marketing.searchPlans(marketing.planKeyword)}>
                                                     查询
                                                 </Button>
                                             </Col>
@@ -239,7 +233,7 @@ export default function AdminMarketingPage() {
                                     <Card variant="borderless">
                                         <Row gutter={16} align="bottom">
                                             <Col flex="320px">
-                                                <Input.Search value={codeKeywordText} placeholder="搜索兑换码、批次或用户" allowClear enterButton={<SearchOutlined />} onSearch={() => marketing.searchCodes(codeKeywordText, marketing.codeType, marketing.codeStatus, codeBatchText)} onChange={(event) => setCodeKeywordText(event.target.value)} />
+                                                <Input.Search value={marketing.codeKeyword} placeholder="搜索兑换码、批次或用户" allowClear enterButton={<SearchOutlined />} onSearch={() => marketing.searchCodes(marketing.codeKeyword, marketing.codeType, marketing.codeStatus, marketing.codeBatchId)} onChange={(event) => marketing.setCodeKeyword(event.target.value)} />
                                             </Col>
                                             <Col flex="180px">
                                                 <Segmented
@@ -250,7 +244,7 @@ export default function AdminMarketingPage() {
                                                         { label: "点数", value: "credits" },
                                                         { label: "订阅", value: "subscription" },
                                                     ]}
-                                                    onChange={(value) => marketing.searchCodes(codeKeywordText, value === "all" ? "" : String(value), marketing.codeStatus, codeBatchText)}
+                                                    onChange={(value) => marketing.searchCodes(marketing.codeKeyword, value === "all" ? "" : String(value), marketing.codeStatus, marketing.codeBatchId)}
                                                 />
                                             </Col>
                                             <Col flex="180px">
@@ -262,16 +256,16 @@ export default function AdminMarketingPage() {
                                                         { label: "未使用", value: "unused" },
                                                         { label: "已使用", value: "used" },
                                                     ]}
-                                                    onChange={(value) => marketing.searchCodes(codeKeywordText, marketing.codeType, value === "all" ? "" : String(value), codeBatchText)}
+                                                    onChange={(value) => marketing.searchCodes(marketing.codeKeyword, marketing.codeType, value === "all" ? "" : String(value), marketing.codeBatchId)}
                                                 />
                                             </Col>
                                             <Col flex="240px">
-                                                <Input value={codeBatchText} placeholder="按批次 ID 精确筛选" allowClear onChange={(event) => setCodeBatchText(event.target.value)} onPressEnter={() => marketing.searchCodes(codeKeywordText, marketing.codeType, marketing.codeStatus, codeBatchText)} />
+                                                <Input value={marketing.codeBatchId} placeholder="按批次 ID 精确筛选" allowClear onChange={(event) => marketing.setCodeBatchId(event.target.value)} onPressEnter={() => marketing.searchCodes(marketing.codeKeyword, marketing.codeType, marketing.codeStatus, marketing.codeBatchId)} />
                                             </Col>
                                             <Col flex="none">
                                                 <Space>
                                                     <Button onClick={marketing.resetCodeFilters}>重置</Button>
-                                                    <Button icon={<ReloadOutlined />} onClick={() => marketing.searchCodes(codeKeywordText, marketing.codeType, marketing.codeStatus, codeBatchText)}>
+                                                    <Button icon={<ReloadOutlined />} onClick={() => marketing.searchCodes(marketing.codeKeyword, marketing.codeType, marketing.codeStatus, marketing.codeBatchId)}>
                                                         查询
                                                     </Button>
                                                 </Space>
@@ -438,6 +432,6 @@ function copyText(text: string, message: { success: (content: string) => void; w
         message.warning("没有可复制内容");
         return;
     }
-    void navigator.clipboard.writeText(text);
+    copy(text);
     message.success(successText);
 }

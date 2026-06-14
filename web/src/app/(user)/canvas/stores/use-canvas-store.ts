@@ -4,6 +4,7 @@ import { persist, type PersistStorage, type StorageValue } from "zustand/middlew
 import { nanoid } from "nanoid";
 import { localForageStorage } from "@/lib/localforage-storage";
 import type { CanvasBackgroundMode } from "@/lib/canvas-theme";
+import { fetchUserData, saveUserData } from "@/services/api/user-data";
 import type { CanvasAssistantSession, CanvasConnection, CanvasNodeData, ViewportTransform } from "../types";
 
 export type CanvasProject = {
@@ -31,6 +32,7 @@ type CanvasStore = {
     renameProject: (id: string, title: string) => void;
     deleteProjects: (ids: string[]) => void;
     replaceProjects: (projects: CanvasProject[]) => void;
+    refetchCloudProjects: (token: string) => Promise<boolean>;
     setCloudHydrated: (cloudHydrated: boolean) => void;
     updateProject: (id: string, patch: Partial<Pick<CanvasProject, "nodes" | "connections" | "chatSessions" | "activeChatId" | "backgroundMode" | "showImageInfo" | "systemPrompt" | "viewport">>) => void;
 };
@@ -120,6 +122,19 @@ export const useCanvasStore = create<CanvasStore>()(
                     return { projects };
                 }),
             replaceProjects: (projects) => set({ projects }),
+            refetchCloudProjects: async (token) => {
+                try {
+                    const result = await fetchUserData<{ projects: CanvasProject[] }>(token, "canvas");
+                    if (Array.isArray(result.payload?.projects)) {
+                        set({ projects: result.payload.projects });
+                    } else {
+                        void saveUserData(token, "canvas", { projects: get().projects });
+                    }
+                    return true;
+                } catch {
+                    return false;
+                }
+            },
             setCloudHydrated: (cloudHydrated) => set({ cloudHydrated }),
             updateProject: (id, patch) =>
                 set((state) => ({

@@ -6,8 +6,7 @@ import { Card, Col, Flex, Progress, Row, Space, Statistic, Table, Tag, Typograph
 import { useAdminOverview } from "../use-admin-overview";
 
 export default function AdminStatisticsPage() {
-    const { overview, isLoading } = useAdminOverview();
-    const codeUseRate = overview?.marketing.redemptionCodes ? Math.round((overview.marketing.usedCodes / overview.marketing.redemptionCodes) * 100) : 0;
+    const { overview, codeUseRate, isLoading } = useAdminOverview();
     const userActiveRate = overview?.users.total ? Math.round((overview.users.active / overview.users.total) * 100) : 0;
 
     const rows = [

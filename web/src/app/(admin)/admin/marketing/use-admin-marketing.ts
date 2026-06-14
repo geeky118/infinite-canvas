@@ -63,6 +63,7 @@ export function useAdminMarketing() {
         queryFn: () => fetchAdminRedemptionCodes(token, { keyword: codeKeyword, type: codeType as AdminRedemptionCodeType | "", status: codeStatus, batchId: codeBatchId, page: codePage, pageSize: codePageSize }),
         enabled: Boolean(token),
         retry: false,
+        staleTime: 30_000,
     });
 
     const settingsMutation = useMutation({
@@ -125,6 +126,9 @@ export function useAdminMarketing() {
         codeType,
         codeStatus,
         codeBatchId,
+        setPlanKeyword,
+        setCodeKeyword,
+        setCodeBatchId,
         codePage,
         codePageSize,
         lastGeneratedCodes,
