@@ -102,6 +102,28 @@ func PublicUser(user User) AuthUser {
 	}
 }
 
+// EmailVerificationCode 注册前的邮箱验证码。
+type EmailVerificationCode struct {
+	ID        string `json:"id" gorm:"primaryKey"`
+	Email     string `json:"email" gorm:"index"`
+	Code      string `json:"code"
+	Purpose   string `json:"purpose" gorm:"index;size:32"`
+	ExpiresAt string `json:"expiresAt" gorm:"index"`
+	UsedAt    string `json:"usedAt"
+	CreatedAt string `json:"createdAt" gorm:"index"`
+}
+
+// EmailVerificationPurpose 验证码用途，目前仅支持注册。
+const (
+	EmailVerificationPurposeRegister string = "register"
+)
+
+// EmailVerificationCodeList 验证码列表（管理端/调试用）。
+type EmailVerificationCodeList struct {
+	Items []EmailVerificationCode `json:"items"`
+	Total int                     `json:"total"`
+}
+
 type CreditLogType string
 
 const (

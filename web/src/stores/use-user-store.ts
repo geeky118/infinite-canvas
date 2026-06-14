@@ -3,7 +3,7 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
 
-import { AUTH_TOKEN_KEY, fetchCurrentUser, login, register, type AuthPayload, type AuthUser } from "@/services/api/auth";
+import { AUTH_TOKEN_KEY, fetchCurrentUser, login, register, sendEmailCode, type AuthPayload, type AuthUser, type EmailCodeResult, type RegisterPayload } from "@/services/api/auth";
 
 type UserStore = {
     token: string;
@@ -14,7 +14,8 @@ type UserStore = {
     clearSession: () => void;
     hydrateUser: () => Promise<void>;
     login: (payload: AuthPayload) => Promise<AuthUser>;
-    register: (payload: AuthPayload) => Promise<AuthUser>;
+    register: (payload: RegisterPayload) => Promise<AuthUser>;
+    sendEmailCode: (email: string) => Promise<EmailCodeResult>;
 };
 
 export const useUserStore = create<UserStore>()(
@@ -65,6 +66,9 @@ export const useUserStore = create<UserStore>()(
                     set({ isLoading: false });
                     throw error;
                 }
+            },
+            sendEmailCode: async (email) => {
+                return sendEmailCode(email);
             },
         }),
         {

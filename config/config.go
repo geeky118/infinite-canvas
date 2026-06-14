@@ -29,6 +29,17 @@ type Config struct {
 	LinuxDoTokenURL     string `env:"LINUX_DO_TOKEN_URL" envDefault:"https://connect.linux.do/oauth2/token"`
 	LinuxDoUserInfoURL  string `env:"LINUX_DO_USERINFO_URL" envDefault:"https://connect.linux.do/api/user"`
 	PromptSyncScheduler bool   `env:"PROMPT_SYNC_SCHEDULER_ENABLED" envDefault:"false"`
+	SMTPHost            string `env:"SMTP_HOST"`
+	SMTPPort            int    `env:"SMTP_PORT" envDefault:"465"`
+	SMTPSecure          bool   `env:"SMTP_SECURE" envDefault:"true"`
+	SMTPUser            string `env:"SMTP_USER"`
+	SMTPPass            string `env:"SMTP_PASS"`
+	SMTPFromName        string `env:"SMTP_FROM_NAME" envDefault:"无限画布"`
+	EmailCodeTTL        int    `env:"EMAIL_CODE_TTL_SECONDS" envDefault:"600"`
+	EmailCodeCooldown   int    `env:"EMAIL_CODE_COOLDOWN_SECONDS" envDefault:"60"`
+	EmailCodeMaxPerHour int    `env:"EMAIL_CODE_MAX_PER_HOUR" envDefault:"5"`
+	EmailCodeLength     int    `env:"EMAIL_CODE_LENGTH" envDefault:"6"`
+	RegisterEmailDomain string `env:"REGISTER_EMAIL_DOMAIN" envDefault:"qq.com"`
 }
 
 var Cfg Config

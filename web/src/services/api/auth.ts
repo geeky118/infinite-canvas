@@ -28,12 +28,30 @@ export type AuthPayload = {
     password: string;
 };
 
+export type RegisterPayload = {
+    username: string;
+    password: string;
+    email: string;
+    code: string;
+};
+
+export type EmailCodeResult = {
+    ttlSeconds: number;
+    cooldownSeconds: number;
+    maxPerHour: number;
+    emailDomain: string;
+};
+
 export async function login(payload: AuthPayload) {
     return apiPost<AuthSession>("/api/auth/login", payload);
 }
 
-export async function register(payload: AuthPayload) {
+export async function register(payload: RegisterPayload) {
     return apiPost<AuthSession>("/api/auth/register", payload);
+}
+
+export async function sendEmailCode(email: string) {
+    return apiPost<EmailCodeResult>("/api/auth/email-code", { email });
 }
 
 export async function fetchCurrentUser(token?: string) {

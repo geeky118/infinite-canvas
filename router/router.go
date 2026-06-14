@@ -17,6 +17,7 @@ func New() *gin.Engine {
 		c.String(http.StatusOK, "ok")
 	})
 	api.POST("/auth/register", gin.WrapF(handler.Register))
+	api.POST("/auth/email-code", gin.WrapF(handler.SendEmailCode))
 	api.POST("/auth/login", gin.WrapF(handler.Login))
 	api.GET("/auth/linux-do/authorize", gin.WrapF(handler.LinuxDoAuthorize))
 	api.GET("/auth/linux-do/callback", gin.WrapF(handler.LinuxDoCallback))

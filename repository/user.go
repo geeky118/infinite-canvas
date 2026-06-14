@@ -79,6 +79,15 @@ func GetUserByEmail(email string) (model.User, bool, error) {
 	return findUser(db, "email = ? OR username = ?", email, email)
 }
 
+// GetUserByExactEmail 仅按 email 字段精确匹配，用于注册/绑定时检查邮箱是否已占用。
+func GetUserByExactEmail(email string) (model.User, bool, error) {
+	db, err := DB()
+	if err != nil {
+		return model.User{}, false, err
+	}
+	return findUser(db, "email = ?", email)
+}
+
 // SaveUser 保存用户信息。
 func SaveUser(user model.User) (model.User, error) {
 	db, err := DB()

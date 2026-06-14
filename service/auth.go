@@ -58,7 +58,7 @@ func EnsureDefaultAdmin() error {
 	return err
 }
 
-func Register(username string, password string) (model.AuthSession, error) {
+func Register(username string, password string, email string, code string) (model.AuthSession, error) {
 	settings, err := repository.GetSettings()
 	if err != nil {
 		return model.AuthSession{}, err
@@ -67,6 +67,9 @@ func Register(username string, password string) (model.AuthSession, error) {
 	if normalizedSettings.Public.Auth.AllowRegister != nil && !*normalizedSettings.Public.Auth.AllowRegister {
 		return model.AuthSession{}, safeMessageError{message: "当前未开放注册"}
 	}
+	if strings.TrimSpace(config.Cfg.SMTPHost) == "" || strings.TrimSpace(config.Cfg.SMTPUser) == "" || config.Cfg.SMTPPass == "" {
+		return model.AuthSession{}, safeMessageError{message: "邮件服务未配置，请联系管理员"}
+	}
 	username = strings.TrimSpace(username)
 	if strings.ContainsAny(username, " \t\r\n") {
 		return model.AuthSession{}, safeMessageError{message: "用户名不能包含空格"}
@@ -74,11 +77,23 @@ func Register(username string, password string) (model.AuthSession, error) {
 	if username == "" || password == "" {
 		return model.AuthSession{}, safeMessageError{message: "用户名和密码不能为空"}
 	}
+	email = NormalizeEmail(email)
+	if _, ok := IsAllowedRegisterEmail(email); !ok {
+		return model.AuthSession{}, safeMessageError{message: "仅支持 @" + strings.ToLower(strings.TrimSpace(config.Cfg.RegisterEmailDomain)) + " 邮箱注册"}
+	}
+	if _, ok, err := repository.GetUserByExactEmail(email); err != nil {
+		return model.AuthSession{}, err
+	} else if ok {
+		return model.AuthSession{}, safeMessageError{message: "该邮箱已注册"}
+	}
 	if _, ok, err := repository.GetUserByUsername(username); err != nil || ok {
 		if err != nil {
 			return model.AuthSession{}, err
 		}
 		return model.AuthSession{}, safeMessageError{message: "用户名已存在"}
+	}
+	if err := ConsumeEmailCode(email, code); err != nil {
+		return model.AuthSession{}, err
 	}
 	hash, err := hashPassword(password)
 	if err != nil {
@@ -88,6 +103,7 @@ func Register(username string, password string) (model.AuthSession, error) {
 		ID:        newID("user"),
 		Username:  username,
 		Password:  hash,
+		Email:     email,
 		Role:      model.UserRoleUser,
 		Credits:   normalizedSettings.Public.Marketing.RegisterCredits,
 		AffCode:   newAffCode(),

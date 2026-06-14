@@ -20,6 +20,7 @@ description: 当前后端主要数据表与字段说明
 当前启动时执行 `AutoMigrate`，自动维护以下表：
 
 - `users`
+- `email_verification_codes`
 - `credit_logs`
 - `subscription_plans`
 - `redemption_codes`
@@ -40,7 +41,7 @@ description: 当前后端主要数据表与字段说明
 | `id` | string | 主键 |
 | `username` | string | 用户名，唯一索引 |
 | `password` | string | 密码哈希 |
-| `email` | string | 邮箱 |
+| `email` | string | 邮箱，注册时必须是 `REGISTER_EMAIL_DOMAIN`（默认 `qq.com`）下的有效地址 |
 | `display_name` | string | 昵称 |
 | `avatar_url` | string | 头像地址 |
 | `role` | string | 角色：`user`、`admin` |
@@ -277,3 +278,18 @@ description: 当前后端主要数据表与字段说明
 | `payload` | json text | 数据内容；MySQL 下为 `LONGTEXT` |
 | `created_at` | string | 创建时间 |
 | `updated_at` | string | 更新时间 |
+
+### email_verification_codes
+
+注册流程发送的邮箱验证码。每次发送都会写入一条新记录，校验通过后通过 `used_at` 标记已使用，避免重复消费。
+
+| 字段 | 类型 | 说明 |
+| --- | --- | --- |
+| `id` | string | 主键 |
+| `email` | string | 接收验证码的邮箱（已规范为小写），索引 |
+| `code` | string | 验证码明文，仅在 `used_at` 为空且未过期时有效 |
+| `purpose` | string | 验证码用途，当前只支持 `register`，索引 |
+| `expires_at` | string | 过期时间（RFC3339），索引 |
+| `used_at` | string | 消费时间，未消费时为空 |
+| `created_at` | string | 创建时间，索引 |
+
