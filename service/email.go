@@ -67,11 +67,6 @@ func sendMailImplicitTLS(addr, host string, auth smtp.Auth, user, to string, msg
 		return EmailSendError{Safe: "邮件服务握手失败", Err: err}
 	}
 	defer c.Close()
-	if ok, _ := c.Extension("STARTTLS"); ok {
-		if err := c.StartTLS(&tls.Config{ServerName: host}); err != nil {
-			return EmailSendError{Safe: "邮件服务加密失败", Err: err}
-		}
-	}
 	if err := c.Auth(auth); err != nil {
 		return EmailSendError{Safe: "邮件服务认证失败", Err: err}
 	}
