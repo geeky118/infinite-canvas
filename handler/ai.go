@@ -257,6 +257,17 @@ func isXiaomiChannel(baseURL string) bool {
 	return strings.Contains(strings.ToLower(baseURL), "xiaomimimo.com")
 }
 
+var xiaomiVoices = map[string]bool{
+	"mimo_default": true, "Mia": true, "Chloe": true, "Milo": true, "Dean": true,
+}
+
+func xiaomiVoice(voice string) string {
+	if xiaomiVoices[voice] {
+		return voice
+	}
+	return "Mia"
+}
+
 func xiaomiAudioSpeech(w http.ResponseWriter, r *http.Request, originalBody []byte, modelName string, channel model.ModelChannel) {
 	user, ok := service.UserFromContext(r.Context())
 	if !ok {
@@ -299,7 +310,7 @@ func xiaomiAudioSpeech(w http.ResponseWriter, r *http.Request, originalBody []by
 		},
 		"modalities": []string{"text", "audio"},
 		"audio": map[string]any{
-			"voice":  payload.Voice,
+			"voice":  xiaomiVoice(payload.Voice),
 			"format": payload.ResponseFormat,
 		},
 	}
