@@ -1,4 +1,4 @@
-export const audioVoiceOptions = [
+export const openaiVoiceOptions = [
     { value: "alloy", label: "Alloy" },
     { value: "ash", label: "Ash" },
     { value: "ballad", label: "Ballad" },
@@ -12,12 +12,22 @@ export const audioVoiceOptions = [
     { value: "verse", label: "Verse" },
     { value: "marin", label: "Marin" },
     { value: "cedar", label: "Cedar" },
-    { value: "mimo_default", label: "MiMo 默认" },
+];
+
+export const xiaomiVoiceOptions = [
     { value: "Mia", label: "Mia" },
     { value: "Chloe", label: "Chloe" },
     { value: "Milo", label: "Milo" },
     { value: "Dean", label: "Dean" },
+    { value: "mimo_default", label: "MiMo 默认" },
 ];
+
+export const audioVoiceOptions = [...openaiVoiceOptions, ...xiaomiVoiceOptions];
+
+export function voiceOptionsForModel(model?: string) {
+    if (model && model.toLowerCase().includes("mimo")) return xiaomiVoiceOptions;
+    return openaiVoiceOptions;
+}
 
 export const audioFormatOptions = [
     { value: "mp3", label: "MP3" },
