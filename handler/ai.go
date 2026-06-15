@@ -315,6 +315,7 @@ func xiaomiAudioSpeech(w http.ResponseWriter, r *http.Request, originalBody []by
 	}
 
 	url := service.BuildModelChannelURL(channel, "/chat/completions")
+	log.Printf("Xiaomi TTS request: url=%s model=%s voice=%s format=%s speed=%.2f", url, payload.Model, payload.Voice, payload.ResponseFormat, payload.Speed)
 	request, err := http.NewRequest(http.MethodPost, url, bytes.NewReader(chatJSON))
 	if err != nil {
 		service.RefundUserCredits(user.ID, payload.Model, credits, "/audio/speech")
@@ -334,12 +335,15 @@ func xiaomiAudioSpeech(w http.ResponseWriter, r *http.Request, originalBody []by
 
 	respBody, err := io.ReadAll(io.LimitReader(response.Body, 32<<20))
 	if err != nil {
+		log.Printf("Xiaomi TTS read response failed: %v", err)
 		service.RefundUserCredits(user.ID, payload.Model, credits, "/audio/speech")
 		Fail(w, "AI 接口请求失败")
 		return
 	}
 
+	log.Printf("Xiaomi TTS response: status=%d body_len=%d", response.StatusCode, len(respBody))
 	if response.StatusCode >= http.StatusBadRequest {
+		log.Printf("Xiaomi TTS upstream error: %s", string(respBody[:min(len(respBody), 500)]))
 		service.RefundUserCredits(user.ID, payload.Model, credits, "/audio/speech")
 		Fail(w, aiUpstreamStatusMessage(response.StatusCode, respBody))
 		return
@@ -358,6 +362,7 @@ func xiaomiAudioSpeech(w http.ResponseWriter, r *http.Request, originalBody []by
 		} `json:"error"`
 	}
 	if err := json.Unmarshal(respBody, &chatResp); err != nil {
+		log.Printf("Xiaomi TTS parse response failed: %v body=%s", err, string(respBody[:min(len(respBody), 300)]))
 		service.RefundUserCredits(user.ID, payload.Model, credits, "/audio/speech")
 		Fail(w, "AI 接口返回格式异常")
 		return
