@@ -6,6 +6,7 @@ import { useEffect, useState } from "react";
 
 import { ModelPicker } from "@/components/model-picker";
 import { fetchImageModels } from "@/services/api/image";
+import { useUserStore } from "@/stores/use-user-store";
 import { syncAppDataToWebdav, type AppSyncDomainKey, type AppSyncProgressEvent } from "@/services/app-sync";
 import { testWebdavConnection, WEBDAV_MANIFEST_FILE_NAME } from "@/services/webdav-sync";
 import { audioFormatOptions, audioVoiceOptions, normalizeAudioSpeedValue } from "@/lib/audio-generation";
@@ -54,6 +55,8 @@ function createWebdavDomainProgress(): Record<AppSyncDomainKey, WebdavDomainProg
 
 export function AppConfigModal() {
     const { message } = App.useApp();
+    const userRole = useUserStore((state) => state.user?.role);
+    const configDialogSource = useConfigStore((state) => state.configDialogSource);
     const [loadingModels, setLoadingModels] = useState(false);
     const [testingWebdav, setTestingWebdav] = useState(false);
     const [syncingWebdav, setSyncingWebdav] = useState(false);
@@ -83,6 +86,11 @@ export function AppConfigModal() {
         if (!config.localChannels.length) return;
         if (!activeChannelId || !config.localChannels.some((channel) => channel.id === activeChannelId)) setActiveChannelId(config.localChannels[0].id);
     }, [activeChannelId, config.localChannels]);
+
+    const canViewConfig = userRole === "admin" || configDialogSource === "url-params";
+    useEffect(() => {
+        if (isConfigOpen && !canViewConfig) setConfigDialogOpen(false);
+    }, [isConfigOpen, canViewConfig, setConfigDialogOpen]);
 
     const finishConfig = () => {
         setConfigDialogOpen(false);
@@ -219,7 +227,7 @@ export function AppConfigModal() {
                     <div className="mt-1 text-xs font-normal text-stone-500">模型、渠道和画布默认行为</div>
                 </div>
             }
-            open={isConfigOpen}
+            open={isConfigOpen && canViewConfig}
             width={960}
             centered
             onCancel={() => setConfigDialogOpen(false)}

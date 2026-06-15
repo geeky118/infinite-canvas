@@ -2,6 +2,7 @@ package handler
 
 import (
 	"bytes"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -11,6 +12,7 @@ import (
 	"net/http"
 	"strings"
 
+	"github.com/basketikun/infinite-canvas/model"
 	"github.com/basketikun/infinite-canvas/service"
 )
 
@@ -27,7 +29,17 @@ func AIChatCompletions(w http.ResponseWriter, r *http.Request) {
 }
 
 func AIAudioSpeech(w http.ResponseWriter, r *http.Request) {
-	proxyAIRequest(w, r, "/audio/speech")
+	body, contentType, modelName, err := readAIRequest(r)
+	if err != nil {
+		log.Printf("AI proxy request read failed: %v", err)
+		Fail(w, "AI 接口请求失败")
+		return
+	}
+	if channel, err := service.SelectModelChannel(modelName); err == nil && isXiaomiChannel(channel.BaseURL) {
+		xiaomiAudioSpeech(w, r, body, modelName, channel)
+		return
+	}
+	proxyAIRequestCore(w, r, body, contentType, modelName, "/audio/speech")
 }
 
 func AIVideos(w http.ResponseWriter, r *http.Request) {
@@ -70,6 +82,10 @@ func proxyAIRequest(w http.ResponseWriter, r *http.Request, path string) {
 		Fail(w, "AI 接口请求失败")
 		return
 	}
+	proxyAIRequestCore(w, r, body, contentType, modelName, path)
+}
+
+func proxyAIRequestCore(w http.ResponseWriter, r *http.Request, body []byte, contentType string, modelName string, path string) {
 	user, ok := service.UserFromContext(r.Context())
 	if !ok {
 		Fail(w, "未登录或权限不足")
@@ -235,6 +251,173 @@ func isArkSeedanceVideo(baseURL string, modelName string) bool {
 func isGrokOpenAIVideo(modelName string) bool {
 	model := strings.ToLower(strings.TrimSpace(modelName))
 	return model == "grok-imagine-video" || model == "grok-imagine-1.0-video"
+}
+
+func isXiaomiChannel(baseURL string) bool {
+	return strings.Contains(strings.ToLower(baseURL), "xiaomimimo.com")
+}
+
+func xiaomiAudioSpeech(w http.ResponseWriter, r *http.Request, originalBody []byte, modelName string, channel model.ModelChannel) {
+	user, ok := service.UserFromContext(r.Context())
+	if !ok {
+		Fail(w, "未登录或权限不足")
+		return
+	}
+	var payload struct {
+		Model         string  `json:"model"`
+		Input         string  `json:"input"`
+		Voice         string  `json:"voice"`
+		ResponseFormat string  `json:"response_format"`
+		Speed         float64 `json:"speed"`
+		Instructions  string  `json:"instructions"`
+	}
+	if err := json.Unmarshal(originalBody, &payload); err != nil || strings.TrimSpace(payload.Input) == "" {
+		Fail(w, "缺少待朗读的文本")
+		return
+	}
+	if payload.Model == "" {
+		payload.Model = modelName
+	}
+
+	credits, err := service.ModelCost(payload.Model)
+	if err != nil {
+		log.Printf("AI proxy read model cost failed: model=%s err=%v", payload.Model, err)
+		Fail(w, "AI 接口请求失败")
+		return
+	}
+
+	if err := service.ConsumeUserCredits(user.ID, payload.Model, credits, "/audio/speech"); err != nil {
+		FailError(w, err)
+		return
+	}
+
+	chatBody := map[string]any{
+		"model": payload.Model,
+		"messages": []map[string]string{
+			{"role": "user", "content": "read aloud"},
+			{"role": "assistant", "content": payload.Input},
+		},
+		"modalities": []string{"text", "audio"},
+		"audio": map[string]any{
+			"voice":  payload.Voice,
+			"format": payload.ResponseFormat,
+		},
+	}
+	if payload.Speed > 0 {
+		chatBody["audio"].(map[string]any)["speed"] = payload.Speed
+	}
+
+	chatJSON, err := json.Marshal(chatBody)
+	if err != nil {
+		service.RefundUserCredits(user.ID, payload.Model, credits, "/audio/speech")
+		Fail(w, "AI 接口请求失败")
+		return
+	}
+
+	url := service.BuildModelChannelURL(channel, "/chat/completions")
+	request, err := http.NewRequest(http.MethodPost, url, bytes.NewReader(chatJSON))
+	if err != nil {
+		service.RefundUserCredits(user.ID, payload.Model, credits, "/audio/speech")
+		Fail(w, "AI 接口请求失败")
+		return
+	}
+	request.Header.Set("Authorization", "Bearer "+channel.APIKey)
+	request.Header.Set("Content-Type", "application/json")
+
+	response, err := http.DefaultClient.Do(request)
+	if err != nil {
+		service.RefundUserCredits(user.ID, payload.Model, credits, "/audio/speech")
+		Fail(w, "AI 接口请求失败")
+		return
+	}
+	defer response.Body.Close()
+
+	respBody, err := io.ReadAll(io.LimitReader(response.Body, 32<<20))
+	if err != nil {
+		service.RefundUserCredits(user.ID, payload.Model, credits, "/audio/speech")
+		Fail(w, "AI 接口请求失败")
+		return
+	}
+
+	if response.StatusCode >= http.StatusBadRequest {
+		service.RefundUserCredits(user.ID, payload.Model, credits, "/audio/speech")
+		Fail(w, aiUpstreamStatusMessage(response.StatusCode, respBody))
+		return
+	}
+
+	var chatResp struct {
+		Choices []struct {
+			Message struct {
+				Audio struct {
+					Data string `json:"data"`
+				} `json:"audio"`
+			} `json:"message"`
+		} `json:"choices"`
+		Error *struct {
+			Message string `json:"message"`
+		} `json:"error"`
+	}
+	if err := json.Unmarshal(respBody, &chatResp); err != nil {
+		service.RefundUserCredits(user.ID, payload.Model, credits, "/audio/speech")
+		Fail(w, "AI 接口返回格式异常")
+		return
+	}
+	if chatResp.Error != nil && chatResp.Error.Message != "" {
+		service.RefundUserCredits(user.ID, payload.Model, credits, "/audio/speech")
+		Fail(w, chatResp.Error.Message)
+		return
+	}
+	if len(chatResp.Choices) == 0 || chatResp.Choices[0].Message.Audio.Data == "" {
+		service.RefundUserCredits(user.ID, payload.Model, credits, "/audio/speech")
+		Fail(w, "AI 未返回音频数据")
+		return
+	}
+
+	audioBytes, err := base64.StdEncoding.DecodeString(chatResp.Choices[0].Message.Audio.Data)
+	if err != nil {
+		service.RefundUserCredits(user.ID, payload.Model, credits, "/audio/speech")
+		Fail(w, "音频数据解码失败")
+		return
+	}
+
+	format := payload.ResponseFormat
+	if format == "" {
+		format = detectAudioFormat(audioBytes)
+	}
+	w.Header().Set("Content-Type", audioContentType(format))
+	w.Header().Set("Content-Length", fmt.Sprintf("%d", len(audioBytes)))
+	w.WriteHeader(http.StatusOK)
+	w.Write(audioBytes)
+}
+
+func detectAudioFormat(data []byte) string {
+	if len(data) >= 4 && string(data[:4]) == "RIFF" {
+		return "wav"
+	}
+	if len(data) >= 3 && string(data[:3]) == "ID3" {
+		return "mp3"
+	}
+	if len(data) >= 2 && data[0] == 0xff && (data[1]&0xe0) == 0xe0 {
+		return "mp3"
+	}
+	return "mp3"
+}
+
+func audioContentType(format string) string {
+	switch format {
+	case "wav":
+		return "audio/wav"
+	case "opus":
+		return "audio/opus"
+	case "aac":
+		return "audio/aac"
+	case "flac":
+		return "audio/flac"
+	case "pcm":
+		return "audio/pcm"
+	default:
+		return "audio/mpeg"
+	}
 }
 
 func aiStatusMessage(statusCode int) string {

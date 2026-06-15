@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Archive, ArchiveRestore, ArrowUp, History, LoaderCircle, MessageSquare, PanelRightClose, Plus, RotateCcw, Settings2, Sparkles, Trash2, X } from "lucide-react";
 import { Button, Modal, Tooltip } from "antd";
 import { motion } from "motion/react";
@@ -8,8 +8,10 @@ import { motion } from "motion/react";
 import { ImageGenerationPending } from "@/components/image-generation-pending";
 import { ModelPicker } from "@/components/model-picker";
 import { useConfigStore, type AiConfig } from "@/stores/use-config-store";
+import { useUserStore } from "@/stores/use-user-store";
 import { CreditSymbol, requestCreditCost } from "@/constant/credits";
 import { canvasThemes } from "@/lib/canvas-theme";
+import { generationScheduler } from "@/lib/generation-scheduler";
 import { nanoid } from "nanoid";
 import { cn } from "@/lib/utils";
 import { requestEdit, requestGeneration, requestImageQuestion, type ChatCompletionMessage } from "@/services/api/image";
@@ -62,6 +64,9 @@ export function CanvasAssistantPanel({ nodes, selectedNodeIds, sessions, activeS
     const updateConfig = useConfigStore((state) => state.updateConfig);
     const isAiConfigReady = useConfigStore((state) => state.isAiConfigReady);
     const openConfigDialog = useConfigStore((state) => state.openConfigDialog);
+    const userRole = useUserStore((state) => state.user?.role);
+    const isAdmin = userRole === "admin";
+    const maxConcurrentRequests = useConfigStore((state) => state.publicSettings?.modelChannel.maxConcurrentRequests) || 3;
     const [width, setWidth] = useState(340);
     const [view, setView] = useState<"chat" | "active" | "archived">("chat");
     const [prompt, setPrompt] = useState("");
@@ -223,12 +228,13 @@ export function CanvasAssistantPanel({ nodes, selectedNodeIds, sessions, activeS
                     return taskImages;
                 });
                 const failedTasks: string[] = [];
+                const taskFn = async (task: (typeof plan.tasks)[number], index: number) => {
+                    const taskConfig = { ...requestConfig, count: String(resolveTaskCount(task, 1)) };
+                    const images = await requestTaskImagesWithRetry(taskConfig, task.prompt, selectTaskReferenceImages(task, referenceImages));
+                    return { task, images: images.slice(0, resolveTaskCount(task, 1)).map((image, imageIndex) => ({ id: taskSlots[index]?.[imageIndex]?.id || image.id, dataUrl: image.dataUrl, prompt: task.prompt })) };
+                };
                 const taskResults = await Promise.allSettled(
-                    plan.tasks.map(async (task, index) => {
-                        const taskConfig = { ...requestConfig, count: String(resolveTaskCount(task, 1)) };
-                        const images = await requestTaskImagesWithRetry(taskConfig, task.prompt, selectTaskReferenceImages(task, referenceImages));
-                        return { task, images: images.slice(0, resolveTaskCount(task, 1)).map((image, imageIndex) => ({ id: taskSlots[index]?.[imageIndex]?.id || image.id, dataUrl: image.dataUrl, prompt: task.prompt })) };
-                    }),
+                    plan.tasks.map((task, index) => generationScheduler.submit(() => taskFn(task, index), maxConcurrentRequests)),
                 );
                 const failedIds: string[] = [];
                 taskResults.forEach((result, index) => {
@@ -277,7 +283,7 @@ export function CanvasAssistantPanel({ nodes, selectedNodeIds, sessions, activeS
         const initialRefs = initialMode === "image" ? selectedRefs : selectedRefs.filter((item) => !hasImageReference(item));
         const initialConfig = { ...effectiveConfig, count: initialMode === "image" ? effectiveConfig.canvasImageCount || effectiveConfig.count : effectiveConfig.count, model: initialMode === "image" ? effectiveConfig.imageModel || effectiveConfig.model : effectiveConfig.textModel || effectiveConfig.model };
         if (!isAiConfigReady(initialConfig, initialConfig.model)) {
-            openConfigDialog(true);
+            if (isAdmin) openConfigDialog(true);
             setIsRunning(false);
             return;
         }
@@ -307,8 +313,8 @@ export function CanvasAssistantPanel({ nodes, selectedNodeIds, sessions, activeS
             const routedUserMessage: CanvasAssistantMessage = { ...userMessage, mode: routedMode, references: refs };
             const requestConfig = { ...effectiveConfig, count: routedMode === "image" ? effectiveConfig.canvasImageCount || effectiveConfig.count : effectiveConfig.count, model: routedMode === "image" ? effectiveConfig.imageModel || effectiveConfig.model : effectiveConfig.textModel || effectiveConfig.model };
             if (!isAiConfigReady(requestConfig, requestConfig.model)) {
-                openConfigDialog(true);
-                updateMessage(session.id, assistantId, { text: "当前模型配置不可用，请先完成配置。", isLoading: false });
+                if (isAdmin) openConfigDialog(true);
+                updateMessage(session.id, assistantId, { text: isAdmin ? "当前模型配置不可用，请先完成配置。" : "请先配置 API Key 后再使用", isLoading: false });
                 return;
             }
             updateMessage(session.id, userMessage.id, { mode: routedUserMessage.mode, references: routedUserMessage.references });
@@ -504,9 +510,11 @@ export function CanvasAssistantPanel({ nodes, selectedNodeIds, sessions, activeS
                                 }}
                             />
                         </Tooltip>
-                        <Tooltip title="配置">
-                            <Button type="text" shape="circle" className="!h-8 !w-8 !min-w-8" style={iconButtonStyle} icon={<Settings2 className="size-4" />} aria-label="配置" onClick={() => openConfigDialog(false)} />
-                        </Tooltip>
+                        {isAdmin ? (
+                            <Tooltip title="配置">
+                                <Button type="text" shape="circle" className="!h-8 !w-8 !min-w-8" style={iconButtonStyle} icon={<Settings2 className="size-4" />} aria-label="配置" onClick={() => openConfigDialog(false)} />
+                            </Tooltip>
+                        ) : null}
                         <Tooltip title="收起对话">
                             <Button type="text" className="!h-8 !rounded-full !px-2 text-xs" style={iconButtonStyle} icon={<PanelRightClose className="size-4" />} aria-label="收起画布助手" onClick={collapse}>
                                 收起
@@ -565,7 +573,7 @@ export function CanvasAssistantPanel({ nodes, selectedNodeIds, sessions, activeS
                         onPromptChange={setPrompt}
                         onSubmit={submit}
                         onConfigChange={(key, value) => updateConfig(key === "count" ? "canvasImageCount" : key, value)}
-                        onMissingConfig={() => openConfigDialog(true)}
+                        onMissingConfig={() => { if (isAdmin) openConfigDialog(true); }}
                         onRemoveReference={(id) => {
                             setRemovedReferenceIds((prev) => new Set(prev).add(id));
                             if (selectedNodeIds.has(id)) onSelectNodeIds(new Set(Array.from(selectedNodeIds).filter((nodeId) => nodeId !== id)));
@@ -630,9 +638,31 @@ function AssistantComposer({
 }) {
     const theme = canvasThemes[useThemeStore((state) => state.theme)];
     const credits = requestCreditCost({ channelMode: config.channelMode, modelCosts, model: config.imageModel || config.model, count: config.count });
+    const [textareaHeight, setTextareaHeight] = useState(80);
+    const startComposerResize = useCallback(() => {
+        const move = (event: MouseEvent) => {
+            const composer = document.querySelector("[data-composer-box]") as HTMLElement | null;
+            if (!composer) return;
+            const rect = composer.getBoundingClientRect();
+            setTextareaHeight(Math.min(320, Math.max(60, rect.bottom - event.clientY - 72)));
+        };
+        const stop = () => {
+            document.body.style.cursor = "";
+            document.body.style.userSelect = "";
+            document.removeEventListener("mousemove", move);
+            document.removeEventListener("mouseup", stop);
+        };
+        document.body.style.cursor = "row-resize";
+        document.body.style.userSelect = "none";
+        document.addEventListener("mousemove", move);
+        document.addEventListener("mouseup", stop);
+    }, []);
 
     return (
-        <div className="px-2 pb-2" onWheelCapture={(event) => event.stopPropagation()}>
+        <div className="px-2 pb-2" data-composer-box="" onWheelCapture={(event) => event.stopPropagation()}>
+            <div className="group/resize flex h-3 cursor-row-resize items-center justify-center" onMouseDown={startComposerResize}>
+                <div className="h-1 w-8 rounded-full bg-current opacity-15 transition group-hover/resize:opacity-40" />
+            </div>
             {references.length ? (
                 <div className="thin-scrollbar mb-1.5 flex max-w-full gap-1.5 overflow-x-auto px-1 pb-1">
                     {references.map((item, index) => (
@@ -656,8 +686,8 @@ function AssistantComposer({
                         event.preventDefault();
                         void onSubmit();
                     }}
-                    className="thin-scrollbar h-20 w-full resize-none border-0 bg-transparent px-1 py-1 text-sm leading-5 outline-none select-text placeholder:text-stone-400"
-                    style={{ color: theme.node.text, caretColor: theme.node.activeStroke, ...canvasTextSelectionStyle }}
+                    className="thin-scrollbar w-full resize-none border-0 bg-transparent px-1 py-1 text-sm leading-5 outline-none select-text placeholder:text-stone-400"
+                    style={{ height: textareaHeight, color: theme.node.text, caretColor: theme.node.activeStroke, ...canvasTextSelectionStyle }}
                     placeholder="输入问题、图片生成或修改要求"
                 />
                 <div className="mt-2 flex items-center justify-between gap-2">
@@ -716,8 +746,8 @@ function AssistantMessages({
             {messages.map((message) => (
                 <div key={message.id} className={cn("flex flex-col gap-2", message.role === "user" ? "items-end" : "items-start")}>
                     <div
-                        className="max-w-[88%] whitespace-pre-wrap rounded-2xl px-3 py-2 text-sm leading-6"
-                        style={message.role === "user" ? { background: theme.toolbar.activeBg, color: theme.toolbar.activeText } : { background: theme.node.fill, color: theme.node.text }}
+                        className="max-w-[88%] select-text whitespace-pre-wrap rounded-2xl px-3 py-2 text-sm leading-6"
+                        style={{ ...(message.role === "user" ? { background: theme.toolbar.activeBg, color: theme.toolbar.activeText } : { background: theme.node.fill, color: theme.node.text }), ...canvasTextSelectionStyle }}
                     >
                         {message.role === "assistant" ? (
                             <div className="mb-1 flex items-center gap-1.5 text-xs opacity-60">

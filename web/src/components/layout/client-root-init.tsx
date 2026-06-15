@@ -159,7 +159,7 @@ export function ClientRootInit({ children }: { children: ReactNode }) {
         searchParams.delete("apikey");
         window.history.replaceState(null, "", `${window.location.pathname}${searchParams.size ? `?${searchParams}` : ""}${window.location.hash}`);
         if (!publicSettings.modelChannel.allowCustomChannel) {
-            openConfigDialog(false);
+            openConfigDialog(false, "url-params");
             message.error("后台未允许用户自定义渠道，请联系管理员进行配置");
             return;
         }
@@ -179,7 +179,7 @@ export function ClientRootInit({ children }: { children: ReactNode }) {
                 ...config.localChannels.slice(1),
             ],
         );
-        openConfigDialog(false);
+        openConfigDialog(false, "url-params");
     }, [config, message, openConfigDialog, publicSettings, updateConfig]);
 
     return <>{children}</>;

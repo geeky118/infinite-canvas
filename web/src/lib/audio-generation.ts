@@ -12,6 +12,11 @@ export const audioVoiceOptions = [
     { value: "verse", label: "Verse" },
     { value: "marin", label: "Marin" },
     { value: "cedar", label: "Cedar" },
+    { value: "mimo_default", label: "MiMo 默认" },
+    { value: "Mia", label: "Mia" },
+    { value: "Chloe", label: "Chloe" },
+    { value: "Milo", label: "Milo" },
+    { value: "Dean", label: "Dean" },
 ];
 
 export const audioFormatOptions = [
@@ -24,7 +29,8 @@ export const audioFormatOptions = [
 ];
 
 export function normalizeAudioVoiceValue(value: string) {
-    return audioVoiceOptions.some((item) => item.value === value) ? value : "alloy";
+    if (value && value.trim()) return value.trim();
+    return "alloy";
 }
 
 export function normalizeAudioFormatValue(value: string) {

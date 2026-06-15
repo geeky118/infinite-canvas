@@ -44,7 +44,7 @@ export function UserStatusActions({ showConfig = true, showVersion = true, varia
     const iconStyle: CSSProperties | undefined = variant === "canvas" ? { color: canvasTheme.node.text } : undefined;
     const versionStyle = iconStyle;
     const avatarStyle: CSSProperties | undefined = variant === "canvas" ? { borderColor: canvasTheme.toolbar.border, color: canvasTheme.node.text, background: "transparent" } : undefined;
-    const shouldShowConfig = showConfig && variant !== "canvas";
+    const shouldShowConfig = showConfig && variant !== "canvas" && user?.role === "admin";
     const shouldShowVersion = showVersion && variant !== "canvas";
     const menuItems: ItemType[] = [
         { key: "user", disabled: true, label: <span className="font-medium text-current">{userName}</span> },

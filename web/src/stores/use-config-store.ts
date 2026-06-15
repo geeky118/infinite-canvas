@@ -106,13 +106,14 @@ type ConfigStore = {
     publicSettings: AdminPublicSettings | null;
     isPublicSettingsLoading: boolean;
     isConfigOpen: boolean;
+    configDialogSource: "url-params" | "manual" | null;
     shouldPromptContinue: boolean;
     updateConfig: <K extends keyof AiConfig>(key: K, value: AiConfig[K]) => void;
     updateWebdavConfig: <K extends keyof WebdavSyncConfig>(key: K, value: WebdavSyncConfig[K]) => void;
     replaceConfig: (config: Partial<AiConfig>) => void;
     loadPublicSettings: () => Promise<void>;
     isAiConfigReady: (config: AiConfig, model: string) => boolean;
-    openConfigDialog: (shouldPromptContinue?: boolean) => void;
+    openConfigDialog: (shouldPromptContinue?: boolean, source?: "url-params" | "manual") => void;
     setConfigDialogOpen: (isOpen: boolean) => void;
     clearPromptContinue: () => void;
 };
@@ -261,6 +262,7 @@ export const useConfigStore = create<ConfigStore>()(
             publicSettings: null,
             isPublicSettingsLoading: false,
             isConfigOpen: false,
+            configDialogSource: null,
             shouldPromptContinue: false,
             updateConfig: (key, value) =>
                 set((state) => ({
@@ -287,8 +289,8 @@ export const useConfigStore = create<ConfigStore>()(
                 }
             },
             isAiConfigReady: (config, model) => isAiConfigReady(config, model),
-            openConfigDialog: (shouldPromptContinue = false) => set({ isConfigOpen: true, shouldPromptContinue }),
-            setConfigDialogOpen: (isConfigOpen) => set({ isConfigOpen }),
+            openConfigDialog: (shouldPromptContinue = false, source = "manual") => set({ isConfigOpen: true, shouldPromptContinue, configDialogSource: source }),
+            setConfigDialogOpen: (isConfigOpen) => set({ isConfigOpen, configDialogSource: isConfigOpen ? null : null }),
             clearPromptContinue: () => set({ shouldPromptContinue: false }),
         }),
         {
