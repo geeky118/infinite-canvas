@@ -302,6 +302,16 @@ func xiaomiAudioSpeech(w http.ResponseWriter, r *http.Request, originalBody []by
 		return
 	}
 
+	isVoiceDesign := strings.Contains(strings.ToLower(payload.Model), "voicedesign")
+	audioObj := map[string]any{
+		"format": payload.ResponseFormat,
+	}
+	if !isVoiceDesign {
+		audioObj["voice"] = xiaomiVoice(payload.Voice)
+	}
+	if payload.Speed > 0 {
+		audioObj["speed"] = payload.Speed
+	}
 	chatBody := map[string]any{
 		"model": payload.Model,
 		"messages": []map[string]string{
@@ -309,13 +319,7 @@ func xiaomiAudioSpeech(w http.ResponseWriter, r *http.Request, originalBody []by
 			{"role": "assistant", "content": payload.Input},
 		},
 		"modalities": []string{"text", "audio"},
-		"audio": map[string]any{
-			"voice":  xiaomiVoice(payload.Voice),
-			"format": payload.ResponseFormat,
-		},
-	}
-	if payload.Speed > 0 {
-		chatBody["audio"].(map[string]any)["speed"] = payload.Speed
+		"audio":   audioObj,
 	}
 
 	chatJSON, err := json.Marshal(chatBody)
